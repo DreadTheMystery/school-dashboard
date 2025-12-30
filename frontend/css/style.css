@@ -1,0 +1,332 @@
+:root {
+    --bg: #0a0f1f;
+    --panel: #0f172a;
+    --panel-strong: #111d33;
+    --muted: #94a3b8;
+    --text: #e2e8f0;
+    --accent: #22d3ee;
+    --accent-strong: #06b6d4;
+    --border: rgba(255, 255, 255, 0.06);
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --success: #22c55e;
+    font-family: "Space Grotesk", "Inter", system-ui, -apple-system, sans-serif;
+    color: var(--text);
+    background: radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.08), transparent 25%),
+        radial-gradient(circle at 80% 10%, rgba(34, 197, 94, 0.08), transparent 20%),
+        var(--bg);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: transparent;
+    color: var(--text);
+}
+
+.app-shell {
+    padding: 32px;
+    max-width: 1200px;
+    margin: 0 auto 48px auto;
+}
+
+.hero {
+    position: relative;
+    overflow: hidden;
+    padding: 28px;
+    margin-bottom: 20px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(15, 118, 110, 0.18), rgba(14, 165, 233, 0.15));
+    border: 1px solid var(--border);
+}
+
+.hero__text h1 {
+    margin: 6px 0 12px 0;
+    font-size: 28px;
+    line-height: 1.25;
+}
+
+.hero__text .subhead {
+    margin: 0;
+    color: var(--muted);
+}
+
+.hero__meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.hero__glow {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 70% 20%, rgba(34, 211, 238, 0.35), transparent 40%);
+    pointer-events: none;
+}
+
+.tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+    margin: 10px 0 18px 0;
+}
+
+.tab-btn {
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    cursor: pointer;
+    transition: transform 0.15s ease, border 0.15s ease, background 0.15s ease;
+}
+
+.tab-btn.active {
+    background: var(--accent-strong);
+    color: #0b1220;
+    border-color: transparent;
+    transform: translateY(-1px);
+}
+
+.tab-content {
+    display: none;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.92));
+    padding: 18px;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+
+.card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.card__head h3 {
+    margin: 0;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 14px;
+}
+
+input,
+select,
+.input,
+textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel-strong);
+    color: var(--text);
+    outline: none;
+    transition: border 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: rgba(34, 211, 238, 0.6);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.2);
+}
+
+button {
+    cursor: pointer;
+    border: none;
+    font-weight: 600;
+}
+
+.primary-btn {
+    background: linear-gradient(90deg, var(--accent-strong), #34d399);
+    color: #0b1220;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+}
+
+.ghost-btn {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 10px 12px;
+    border-radius: 10px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.eyebrow {
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 4px 0;
+    font-size: 12px;
+}
+
+.section-note {
+    color: var(--muted);
+    margin: 4px 0 0 0;
+}
+
+.search {
+    max-width: 260px;
+}
+
+.table-wrap {
+    overflow: auto;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+th,
+td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+th {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--muted);
+    font-weight: 600;
+}
+
+tr:nth-child(even) td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.status-paid {
+    color: var(--success);
+    font-weight: 700;
+}
+
+.status-partial {
+    color: var(--warning);
+    font-weight: 700;
+}
+
+.status-unpaid {
+    color: var(--danger);
+    font-weight: 700;
+}
+
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    font-size: 14px;
+}
+
+.pill--active {
+    background: rgba(34, 211, 238, 0.12);
+    border-color: rgba(34, 211, 238, 0.4);
+}
+
+.chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.chip-label {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: var(--panel-strong);
+    border: 1px solid var(--border);
+}
+
+.chip input {
+    accent-color: var(--accent);
+}
+
+.half-only {
+    display: none;
+}
+
+.auth-shell {
+    max-width: 480px;
+    margin: 60px auto;
+    padding: 24px;
+}
+
+.auth-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 14px 50px rgba(0, 0, 0, 0.35);
+}
+
+.auth-card h1 {
+    margin: 0 0 10px 0;
+}
+
+.auth-card p {
+    margin: 0 0 16px 0;
+    color: var(--muted);
+}
+
+.error-text {
+    color: var(--danger);
+    margin-top: 8px;
+}

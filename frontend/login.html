@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - School Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body class="auth-shell">
+    <div class="auth-card">
+        <p class="eyebrow">Welcome back</p>
+        <h1>Sign in to SchoolOS</h1>
+        <p>Pick your role, then enter your credentials to continue.</p>
+
+        <form id="loginForm" class="form-grid">
+            <div class="chip-group">
+                <span class="chip-label">Login as</span>
+                <label class="chip">
+                    <input type="radio" name="role" value="admin" checked>
+                    <span>Admin</span>
+                </label>
+                <label class="chip">
+                    <input type="radio" name="role" value="teacher">
+                    <span>Teacher</span>
+                </label>
+                <label class="chip">
+                    <input type="radio" name="role" value="account">
+                    <span>Accountant</span>
+                </label>
+            </div>
+
+            <label>Username
+                <input type="text" name="username" placeholder="Username" required>
+            </label>
+            <label>Password
+                <input type="password" name="password" placeholder="Password" required>
+            </label>
+            <button type="submit" class="primary-btn">Login</button>
+        </form>
+        <p id="loginError" class="error-text"></p>
+    </div>
+
+    <script>
+        const API = 'http://localhost:3000/api/auth';
+        const form = document.getElementById('loginForm');
+        const errorEl = document.getElementById('loginError');
+
+        const selectedRole = () => {
+            const checked = document.querySelector('input[name="role"]:checked');
+            return checked ? checked.value : null;
+        };
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errorEl.textContent = '';
+            const formData = Object.fromEntries(new FormData(form).entries());
+            formData.role = selectedRole();
+
+            if (!formData.role) {
+                errorEl.textContent = 'Select a role to continue.';
+                return;
+            }
+
+            const res = await fetch(`${API}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData),
+            });
+
+            if (!res.ok) {
+                errorEl.textContent = 'Invalid credentials or role mismatch.';
+                return;
+            }
+
+            const data = await res.json();
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('role', data.role);
+            localStorage.setItem('assigned_class_id', data.assigned_class_id ?? '');
+            window.location.href = 'index.html';
+        });
+    </script>
+</body>
+
+</html>

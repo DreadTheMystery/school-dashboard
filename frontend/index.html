@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School Management Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body class="app-shell">
+    <header class="hero">
+        <div class="hero__text">
+            <p class="eyebrow">SchoolOS</p>
+            <h1>Unified dashboard for admissions, classes, and tuition.</h1>
+            <p class="subhead">Manage people, classes, and payments with a clean, role-aware workspace.</p>
+            <div class="hero__meta">
+                <span class="pill pill--active" id="roleBadge">Role: Loading...</span>
+                <button id="logoutBtn" class="ghost-btn">Log out</button>
+            </div>
+        </div>
+        <div class="hero__glow"></div>
+    </header>
+
+    <div class="tabs">
+        <button class="tab-btn" data-tab="studentsTab">Students</button>
+        <button class="tab-btn" data-tab="classesTab">Classes</button>
+        <button class="tab-btn" data-tab="studentProfileTab">Student Profile</button>
+        <button class="tab-btn" data-tab="resultsTab">Results</button>
+        <button class="tab-btn" data-tab="paymentsTab">Payments</button>
+        <button class="tab-btn" data-tab="staffTab">Staff</button>
+    </div>
+
+    <section id="studentsTab" class="tab-content">
+        <div class="section-header">
+            <div>
+                <p class="eyebrow">Admissions</p>
+                <h2>Students</h2>
+                <p class="section-note">Add students, assign them to classes, and keep their guardians reachable.</p>
+            </div>
+            <input type="text" id="studentSearch" class="input search" placeholder="Search students">
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card__head">
+                    <h3>Add student</h3>
+                    <small>Required fields are marked.</small>
+                </div>
+                <form id="studentForm" class="form-grid">
+                    <label>Full name <input type="text" name="full_name" placeholder="e.g. Ada Lovelace"
+                            required></label>
+                    <label>Admission no <input type="text" name="admission_no" placeholder="e.g. AD-103"
+                            required></label>
+                    <label>Gender <input type="text" name="gender" placeholder="Gender"></label>
+                    <label>Date of birth <input type="date" name="date_of_birth"></label>
+                    <label>Religion <input type="text" name="religion" placeholder="Religion"></label>
+                    <label>Guardian name <input type="text" name="guardian_name" placeholder="Guardian name"></label>
+                    <label>Guardian phone <input type="text" name="guardian_phone" placeholder="Phone"></label>
+                    <label>Class <select name="class_id" id="classSelect"></select></label>
+                    <button type="submit" class="primary-btn">Add student</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="card__head">
+                    <h3>Students list</h3>
+                    <button class="ghost-btn" id="exportStudentsAnchor">Export CSV</button>
+                </div>
+                <div class="table-wrap">
+                    <table id="studentsTable">
+                        <thead>
+                            <tr>
+                                <th>Admission No</th>
+                                <th>Name</th>
+                                <th>Class</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="classesTab" class="tab-content">
+        <div class="section-header">
+            <div>
+                <p class="eyebrow">Structure</p>
+                <h2>Classes</h2>
+                <p class="section-note">Create classes and arms to keep students organized.</p>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card__head">
+                    <h3>Add class</h3>
+                    <button type="button" class="ghost-btn" id="seedClassesBtn">Seed JSS1-SS3 A/B</button>
+                </div>
+                <form id="classForm" class="form-grid">
+                    <label>Class name <input type="text" name="name" placeholder="e.g. Grade 10" required></label>
+                    <label>Arm <input type="text" name="arm" placeholder="e.g. A (optional)"></label>
+                    <button type="submit" class="primary-btn">Add class</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="card__head">
+                    <h3>Classes list</h3>
+                </div>
+                <div class="table-wrap">
+                    <table id="classesTable">
+                        <thead>
+                            <tr>
+                                <th>Class Name</th>
+                                <th>Arm</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="studentProfileTab" class="tab-content">
+        <div class="section-header">
+            <div>
+                <p class="eyebrow">Student</p>
+                <h2>Student Profile</h2>
+                <p class="section-note">Each student automatically has a dashboard here.</p>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card__head">
+                    <h3>Select student</h3>
+                </div>
+                <div class="form-grid">
+                    <label>Student <select id="profileStudentSelect" required></select></label>
+                    <button type="button" class="primary-btn" id="loadProfileBtn">Load profile</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card__head">
+                    <h3>Profile</h3>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <tbody id="profileDetails"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card__head">
+                    <h3>Payments</h3>
+                </div>
+                <div class="table-wrap">
+                    <table id="profilePaymentsTable">
+                        <thead>
+                            <tr>
+                                <th>Term</th>
+                                <th>Session</th>
+                                <th>Type</th>
+                                <th>Paid</th>
+                                <th>Remaining</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card" id="profileResultsCard">
+                <div class="card__head">
+                    <h3>Results</h3>
+                </div>
+                <div class="table-wrap">
+                    <table id="profileResultsTable">
+                        <thead>
+                            <tr>
+                                <th>Term</th>
+                                <th>Session</th>
+                                <th>Test</th>
+                                <th>Exam</th>
+                                <th>Total</th>
+                                <th>Updated</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="paymentsTab" class="tab-content">
+        <div class="section-header">
+            <div>
+                <p class="eyebrow">Finance</p>
+                <h2>Payments</h2>
+                <p class="section-note">Track full and half payments with remaining balances at a glance.</p>
+            </div>
+            <input type="text" id="paymentSearch" class="input search" placeholder="Search payments">
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card__head">
+                    <h3>Record payment</h3>
+                </div>
+                <form id="paymentForm" class="form-grid">
+                    <label>Student <select name="student_id" id="studentSelect" required></select></label>
+
+                    <div class="chip-group" id="paymentTypeGroup">
+                        <span class="chip-label">Payment type</span>
+                        <label class="chip">
+                            <input type="radio" name="payment_type" value="full" checked>
+                            <span>Full payment</span>
+                        </label>
+                        <label class="chip">
+                            <input type="radio" name="payment_type" value="half">
+                            <span>Half payment</span>
+                        </label>
+                    </div>
+
+                    <label>Amount paid <input type="number" name="amount_paid" id="amountPaid" placeholder="0"
+                            required></label>
+                    <label class="half-only">Amount remaining <input type="number" name="amount_remaining"
+                            id="amountRemaining" placeholder="0"></label>
+                    <label>Term <input type="text" name="term" placeholder="e.g. 1st Term" required></label>
+                    <label>Session <input type="text" name="session" placeholder="e.g. 2025/2026" required></label>
+                    <button type="submit" class="primary-btn">Save payment</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="card__head">
+                    <h3>Payment summary</h3>
+                    <button class="ghost-btn" id="exportPaymentsAnchor">Export CSV</button>
+                </div>
+                <div class="table-wrap">
+                    <table id="paymentTable">
+                        <thead>
+                            <tr>
+                                <th>Admission No</th>
+                                <th>Student Name</th>
+                                <th>Total Paid</th>
+                                <th>Remaining</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="resultsTab" class="tab-content">
+        <div class="section-header">
+            <div>
+                <p class="eyebrow">Academics</p>
+                <h2>Results</h2>
+                <p class="section-note">Enter one total per student, per term (test + exam).</p>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card__head">
+                    <h3>Save result</h3>
+                    <small>Select class, term, and session first.</small>
+                </div>
+                <form id="resultForm" class="form-grid">
+                    <label>Class <select id="resultClassSelect" required></select></label>
+                    <label>Student <select id="resultStudentSelect" required></select></label>
+                    <label>Term <input type="text" id="resultTerm" placeholder="e.g. 1st Term" required></label>
+                    <label>Session <input type="text" id="resultSession" placeholder="e.g. 2025/2026" required></label>
+                    <label>Test score <input type="number" id="resultTest" placeholder="0" min="0" required></label>
+                    <label>Exam score <input type="number" id="resultExam" placeholder="0" min="0" required></label>
+                    <button type="submit" class="primary-btn">Save result</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="card__head">
+                    <h3>Class results</h3>
+                    <small>Loads the selected class for the chosen term/session.</small>
+                </div>
+                <div class="table-wrap">
+                    <table id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th>Admission No</th>
+                                <th>Student Name</th>
+                                <th>Test</th>
+                                <th>Exam</th>
+                                <th>Total</th>
+                                <th>Updated</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="staffTab" class="tab-content">
+        <div class="section-header">
+            <div>
+                <p class="eyebrow">Admin</p>
+                <h2>Staff</h2>
+                <p class="section-note">Create staff accounts (Teacher / Accountant). Admin-only.</p>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card__head">
+                    <h3>Add staff</h3>
+                </div>
+                <form id="staffForm" class="form-grid">
+                    <label>Username <input type="text" name="username" required></label>
+                    <label>Password <input type="password" name="password" required></label>
+                    <label>Role
+                        <select name="role" required>
+                            <option value="teacher">Teacher</option>
+                            <option value="account">Accountant</option>
+                        </select>
+                    </label>
+                    <button type="submit" class="primary-btn">Create staff</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="card__head">
+                    <h3>Staff list</h3>
+                </div>
+                <div class="table-wrap">
+                    <table id="staffTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Assigned Class</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script src="js/main.js"></script>
+</body>
+
+</html>
