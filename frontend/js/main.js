@@ -60,6 +60,7 @@ const resultsTableBody = document.querySelector("#resultsTable tbody");
 const staffForm = document.getElementById("staffForm");
 const staffTableBody = document.querySelector("#staffTable tbody");
 
+const profileClassSelect = document.getElementById("profileClassSelect");
 const profileStudentSelect = document.getElementById("profileStudentSelect");
 const loadProfileBtn = document.getElementById("loadProfileBtn");
 const profileDetailsBody = document.getElementById("profileDetails");
@@ -67,6 +68,8 @@ const profilePaymentsBody = document.querySelector(
   "#profilePaymentsTable tbody"
 );
 const profileResultsBody = document.querySelector("#profileResultsTable tbody");
+
+const paymentClassSelect = document.getElementById("paymentClassSelect");
 
 const seedClassesBtn = document.getElementById("seedClassesBtn");
 
@@ -77,6 +80,133 @@ const API = "http://localhost:3000/api";
 const token = localStorage.getItem("token");
 const role = localStorage.getItem("role");
 let assignedClassId = localStorage.getItem("assigned_class_id") || "";
+
+const toastHost = document.getElementById("toastHost");
+
+function notify(message, type = "info", options = {}) {
+  const opts = { title: null, timeout: 4200, ...options };
+  const safeType = ["success", "error", "warning", "info"].includes(type)
+    ? type
+    : "info";
+
+  if (!toastHost) {
+    console.log(`[${safeType}]`, message);
+    return;
+  }
+
+  const toast = document.createElement("div");
+  toast.className = `toast toast--${safeType}`;
+
+  const titleText =
+    opts.title ||
+    (safeType === "success"
+      ? "Success"
+      : safeType === "error"
+      ? "Error"
+      : safeType === "warning"
+      ? "Notice"
+      : "Info");
+
+  toast.innerHTML = `
+    <div>
+      <p class="toast__title">${titleText}</p>
+      <p class="toast__msg"></p>
+    </div>
+    <button type="button" class="toast__close">Close</button>
+  `;
+
+  const msgEl = toast.querySelector(".toast__msg");
+  if (msgEl) msgEl.textContent = String(message || "");
+
+  const closeBtn = toast.querySelector(".toast__close");
+  const remove = () => toast.remove();
+  if (closeBtn) closeBtn.addEventListener("click", remove);
+
+  toastHost.appendChild(toast);
+
+  if (opts.timeout && Number(opts.timeout) > 0) {
+    window.setTimeout(remove, Number(opts.timeout));
+  }
+}
+
+function setTableStatus(tbody, colSpan, text) {
+  if (!tbody) return;
+  const span = Number(colSpan) || 1;
+  tbody.innerHTML = `<tr><td class="table-status" colspan="${span}">${text}</td></tr>`;
+  applyMobileTableLabels(tbody);
+}
+
+function applyMobileTableLabels(tbody) {
+  const table = tbody?.closest?.("table");
+  if (!table) return;
+  const headers = Array.from(table.querySelectorAll("thead th")).map((th) =>
+    String(th.textContent || "").trim()
+  );
+  if (!headers.length) return;
+
+  table.classList.add("table--stack");
+
+  Array.from(tbody.querySelectorAll("tr")).forEach((tr) => {
+    const tds = Array.from(tr.children).filter(
+      (el) => el && el.tagName === "TD"
+    );
+    tds.forEach((td, idx) => {
+      if (td.classList.contains("table-status")) return;
+      const label = headers[idx] || "";
+      if (label) td.setAttribute("data-label", label);
+    });
+  });
+}
+
+function setButtonBusy(btn, busy, busyText) {
+  if (!btn) return;
+  if (busy) {
+    if (!btn.dataset.defaultText) btn.dataset.defaultText = btn.textContent;
+    btn.disabled = true;
+    if (busyText) btn.textContent = busyText;
+  } else {
+    btn.disabled = false;
+    if (btn.dataset.defaultText) btn.textContent = btn.dataset.defaultText;
+  }
+}
+
+async function runWithFormBusy(formEl, busyText, fn) {
+  if (!formEl) return fn();
+  if (formEl.dataset.busy === "1") return;
+  formEl.dataset.busy = "1";
+
+  const submitBtn = formEl.querySelector('button[type="submit"]');
+  const fields = formEl.querySelectorAll("input, select, textarea, button");
+  fields.forEach((el) => {
+    if (el === submitBtn) return;
+    el.disabled = true;
+  });
+  setButtonBusy(submitBtn, true, busyText);
+
+  try {
+    await fn();
+  } finally {
+    fields.forEach((el) => {
+      if (el === submitBtn) return;
+      el.disabled = false;
+    });
+    setButtonBusy(submitBtn, false);
+    formEl.dataset.busy = "0";
+  }
+}
+
+async function runWithButtonBusy(btn, busyText, fn) {
+  if (!btn) return fn();
+  if (btn.dataset.busy === "1") return;
+  btn.dataset.busy = "1";
+  setButtonBusy(btn, true, busyText);
+  try {
+    await fn();
+  } finally {
+    setButtonBusy(btn, false);
+    btn.dataset.busy = "0";
+  }
+}
 
 if (!token) {
   window.location.href = "login.html";
@@ -101,6 +231,40 @@ const authHeaders = token
 let classesCache = [];
 let studentsCache = [];
 let meCache = null;
+
+function setSelectPlaceholder(selectEl, text) {
+  if (!selectEl) return;
+  selectEl.innerHTML = `<option value="" disabled selected>${text}</option>`;
+}
+
+function populateStudentsForClass(selectEl, classId) {
+  if (!selectEl) return;
+  const cid = Number(classId);
+  if (!cid) {
+    setSelectPlaceholder(selectEl, "Select class first");
+    return;
+  }
+
+  const filtered = (studentsCache || []).filter(
+    (s) => Number(s.class_id) === cid
+  );
+
+  if (!filtered.length) {
+    selectEl.innerHTML =
+      '<option value="" disabled selected>No students in this class</option>';
+    return;
+  }
+
+  const options = filtered
+    .map(
+      (s) =>
+        `<option value="${s.id}">${s.full_name} (${s.admission_no})</option>`
+    )
+    .join("");
+
+  selectEl.innerHTML =
+    '<option value="" disabled selected>Select student</option>' + options;
+}
 
 async function loadMe() {
   try {
@@ -215,12 +379,30 @@ paymentTypeInputs.forEach((input) =>
 syncHalfFields();
 
 async function loadClasses() {
+  setTableStatus(classesTableBody, 2, "Loading classes...");
+  setSelectPlaceholder(classSelect, "Loading classes...");
+  setSelectPlaceholder(resultClassSelect, "Loading classes...");
+  setSelectPlaceholder(profileClassSelect, "Loading classes...");
+  setSelectPlaceholder(paymentClassSelect, "Loading classes...");
+
   const res = await authFetch(`${API}/classes`);
   const classes = await safeJson(res).catch((err) => {
-    alert(`Failed to load classes: ${err.message}`);
+    notify(`Failed to load classes: ${err.message}`, "error");
+    setTableStatus(classesTableBody, 2, "Failed to load classes.");
     return [];
   });
-  if (!classes) return [];
+  if (!classes.length) {
+    setTableStatus(
+      classesTableBody,
+      2,
+      "No classes yet. Add a class or use Seed."
+    );
+    setSelectPlaceholder(classSelect, "No classes yet");
+    setSelectPlaceholder(resultClassSelect, "No classes yet");
+    setSelectPlaceholder(profileClassSelect, "No classes yet");
+    setSelectPlaceholder(paymentClassSelect, "No classes yet");
+    return [];
+  }
   if (classes.length < 12 && seedClassesBtn) {
     await seedDefaults();
     return [];
@@ -233,6 +415,8 @@ async function loadClasses() {
       .join("");
   if (classSelect) classSelect.innerHTML = classOptionsHtml;
   if (resultClassSelect) resultClassSelect.innerHTML = classOptionsHtml;
+  if (profileClassSelect) profileClassSelect.innerHTML = classOptionsHtml;
+  if (paymentClassSelect) paymentClassSelect.innerHTML = classOptionsHtml;
   classesTableBody.innerHTML = classes
     .map(
       (c) => `
@@ -242,6 +426,7 @@ async function loadClasses() {
     </tr>`
     )
     .join("");
+  applyMobileTableLabels(classesTableBody);
   return classes;
 }
 
@@ -254,10 +439,16 @@ async function loadClassResults() {
 
   if (!classId) return;
 
+  setTableStatus(resultsTableBody, 7, "Loading results...");
+
   if (!term || !session) {
-    resultsTableBody.innerHTML =
-      '<tr><td colspan="7">Enter term and session to load results.</td></tr>';
-    if (resultStudentSelect) resultStudentSelect.innerHTML = "";
+    setTableStatus(
+      resultsTableBody,
+      7,
+      "Enter term and session to load results."
+    );
+    // Allow saving new results even before any results exist
+    populateStudentsForClass(resultStudentSelect, classId);
     return;
   }
 
@@ -270,8 +461,22 @@ async function loadClassResults() {
     );
     rows = await safeJson(res);
   } catch (err) {
-    resultsTableBody.innerHTML = `<tr><td colspan="7">Failed to load results: ${err.message}</td></tr>`;
+    setTableStatus(
+      resultsTableBody,
+      7,
+      `Failed to load results: ${err.message}`
+    );
     if (resultStudentSelect) resultStudentSelect.innerHTML = "";
+    return;
+  }
+
+  if (!rows || rows.length === 0) {
+    setTableStatus(
+      resultsTableBody,
+      7,
+      "No results yet for this class/term/session. Use the form to save results."
+    );
+    populateStudentsForClass(resultStudentSelect, classId);
     return;
   }
 
@@ -306,6 +511,7 @@ async function loadClassResults() {
       </tr>`;
     })
     .join("");
+  applyMobileTableLabels(resultsTableBody);
 }
 
 if (resultsTableBody) {
@@ -323,7 +529,7 @@ if (resultsTableBody) {
     const term = resultTermInput?.value?.trim();
     const session = resultSessionInput?.value?.trim();
     if (!term || !session) {
-      alert("Enter term and session first.");
+      notify("Enter term and session first.", "warning");
       return;
     }
 
@@ -385,7 +591,7 @@ if (resultsTableBody) {
         testScore < 0 ||
         examScore < 0
       ) {
-        alert("Please enter valid non-negative scores.");
+        notify("Please enter valid non-negative scores.", "warning");
         return;
       }
 
@@ -402,7 +608,7 @@ if (resultsTableBody) {
           }),
         }).then(safeJson);
       } catch (err) {
-        alert(`Could not save result: ${err.message}`);
+        notify(`Could not save result: ${err.message}`, "error");
         return;
       }
 
@@ -412,12 +618,22 @@ if (resultsTableBody) {
 }
 
 async function loadStudents() {
+  setTableStatus(studentsTableBody, 4, "Loading students...");
   const res = await authFetch(`${API}/students`);
   const students = await safeJson(res).catch((err) => {
-    alert(`Failed to load students: ${err.message}`);
+    notify(`Failed to load students: ${err.message}`, "error");
+    setTableStatus(studentsTableBody, 4, "Failed to load students.");
     return [];
   });
   if (!students) return [];
+
+  if (!students.length) {
+    setTableStatus(
+      studentsTableBody,
+      4,
+      "No students yet. Use the 'Add student' form to create one."
+    );
+  }
 
   studentsCache = students;
 
@@ -436,30 +652,49 @@ async function loadStudents() {
     </tr>`
     )
     .join("");
+  applyMobileTableLabels(studentsTableBody);
   return students;
 }
 
 async function loadStudentSelect() {
-  const students = await loadStudents();
-  studentSelect.innerHTML = students
-    .map(
-      (s) =>
-        `<option value="${s.id}">${s.full_name} (${s.admission_no})</option>`
-    )
-    .join("");
+  await loadStudents();
 
-  if (profileStudentSelect) {
-    profileStudentSelect.innerHTML = students
-      .map(
-        (s) =>
-          `<option value="${s.id}">${s.full_name} (${s.admission_no})</option>`
-      )
-      .join("");
+  // Class-first UX for selects
+  setSelectPlaceholder(studentSelect, "Select class first");
+  setSelectPlaceholder(profileStudentSelect, "Select class first");
+  setSelectPlaceholder(resultStudentSelect, "Select class first");
+
+  // If teacher is assigned to a class, preselect and lock
+  if (role === "teacher" && assignedClassId) {
+    if (profileClassSelect) {
+      profileClassSelect.value = String(assignedClassId);
+      profileClassSelect.disabled = true;
+      populateStudentsForClass(profileStudentSelect, assignedClassId);
+    }
   }
+}
+
+if (resultClassSelect) {
+  resultClassSelect.addEventListener("change", () => {
+    populateStudentsForClass(resultStudentSelect, resultClassSelect.value);
+  });
+}
+
+if (profileClassSelect) {
+  profileClassSelect.addEventListener("change", () => {
+    populateStudentsForClass(profileStudentSelect, profileClassSelect.value);
+  });
+}
+
+if (paymentClassSelect) {
+  paymentClassSelect.addEventListener("change", () => {
+    populateStudentsForClass(studentSelect, paymentClassSelect.value);
+  });
 }
 
 async function loadUsers() {
   if (role !== "admin" || !staffTableBody) return;
+  setTableStatus(staffTableBody, 6, "Loading staff...");
   try {
     const res = await authFetch(`${API}/users`);
     const users = await safeJson(res);
@@ -469,12 +704,27 @@ async function loadUsers() {
         .map((c) => `<option value="${c.id}">${c.name} ${c.arm || ""}</option>`)
         .join("");
 
-    staffTableBody.innerHTML = (users || [])
+    const usersList = users || [];
+
+    if (!usersList.length) {
+      setTableStatus(
+        staffTableBody,
+        6,
+        "No staff yet. Create staff accounts using the form."
+      );
+      return;
+    }
+
+    staffTableBody.innerHTML = usersList
       .map((u) => {
         const isActive = Number(u.is_active ?? 1) === 1;
         const assignedLabel = u.assigned_class_name
           ? `${u.assigned_class_name} ${u.assigned_class_arm || ""}`
           : "-";
+
+        const statusBadge = isActive
+          ? '<span class="badge badge--active">Active</span>'
+          : '<span class="badge badge--disabled">Disabled</span>';
 
         const assignControls =
           u.role === "teacher"
@@ -492,7 +742,7 @@ async function loadUsers() {
           <td>${u.username}</td>
           <td>${u.role}</td>
           <td>${assignedLabel}</td>
-          <td>${isActive ? "Active" : "Disabled"}</td>
+          <td>${statusBadge}</td>
           <td class="actions">
             ${assignControls}
             <button class="ghost-btn staff-reset" data-user-id="${
@@ -507,9 +757,10 @@ async function loadUsers() {
         </tr>`;
       })
       .join("");
+    applyMobileTableLabels(staffTableBody);
 
     // set selected option for each teacher
-    (users || []).forEach((u) => {
+    (usersList || []).forEach((u) => {
       if (u.role !== "teacher") return;
       const sel = staffTableBody.querySelector(
         `.staff-assign-select[data-user-id="${u.id}"]`
@@ -517,7 +768,7 @@ async function loadUsers() {
       if (sel && u.assigned_class_id) sel.value = String(u.assigned_class_id);
     });
   } catch (err) {
-    staffTableBody.innerHTML = `<tr><td colspan="6">Failed to load staff: ${err.message}</td></tr>`;
+    setTableStatus(staffTableBody, 6, `Failed to load staff: ${err.message}`);
   }
 }
 
@@ -534,19 +785,22 @@ if (staffTableBody) {
       );
       const classId = select?.value;
       if (!classId) {
-        alert("Select a class to assign.");
+        notify("Select a class to assign.", "warning");
         return;
       }
-      try {
-        await authFetch(`${API}/users/${userId}/assign-class`, {
-          method: "PATCH",
-          headers: authHeaders,
-          body: JSON.stringify({ class_id: Number(classId) }),
-        }).then(safeJson);
-        await loadUsers();
-      } catch (err) {
-        alert(`Assign failed: ${err.message}`);
-      }
+      await runWithButtonBusy(assignBtn, "Assigning...", async () => {
+        try {
+          await authFetch(`${API}/users/${userId}/assign-class`, {
+            method: "PATCH",
+            headers: authHeaders,
+            body: JSON.stringify({ class_id: Number(classId) }),
+          }).then(safeJson);
+          notify("Teacher assigned", "success");
+          await loadUsers();
+        } catch (err) {
+          notify(`Assign failed: ${err.message}`, "error");
+        }
+      });
       return;
     }
 
@@ -554,16 +808,18 @@ if (staffTableBody) {
       const userId = resetBtn.dataset.userId;
       const newPassword = prompt("Enter new password for this staff");
       if (!newPassword) return;
-      try {
-        await authFetch(`${API}/users/${userId}/password`, {
-          method: "PATCH",
-          headers: authHeaders,
-          body: JSON.stringify({ password: newPassword }),
-        }).then(safeJson);
-        alert("Password reset");
-      } catch (err) {
-        alert(`Reset failed: ${err.message}`);
-      }
+      await runWithButtonBusy(resetBtn, "Resetting...", async () => {
+        try {
+          await authFetch(`${API}/users/${userId}/password`, {
+            method: "PATCH",
+            headers: authHeaders,
+            body: JSON.stringify({ password: newPassword }),
+          }).then(safeJson);
+          notify("Password reset", "success");
+        } catch (err) {
+          notify(`Reset failed: ${err.message}`, "error");
+        }
+      });
       return;
     }
 
@@ -573,22 +829,40 @@ if (staffTableBody) {
       const nextActive = !isActive;
       if (!confirm(`${nextActive ? "Enable" : "Disable"} this account?`))
         return;
-      try {
-        await authFetch(`${API}/users/${userId}/active`, {
-          method: "PATCH",
-          headers: authHeaders,
-          body: JSON.stringify({ is_active: nextActive }),
-        }).then(safeJson);
-        await loadUsers();
-      } catch (err) {
-        alert(`Update failed: ${err.message}`);
-      }
+      await runWithButtonBusy(
+        toggleBtn,
+        nextActive ? "Enabling..." : "Disabling...",
+        async () => {
+          try {
+            await authFetch(`${API}/users/${userId}/active`, {
+              method: "PATCH",
+              headers: authHeaders,
+              body: JSON.stringify({ is_active: nextActive }),
+            }).then(safeJson);
+            notify(
+              nextActive ? "Account enabled" : "Account disabled",
+              "success"
+            );
+            await loadUsers();
+          } catch (err) {
+            notify(`Update failed: ${err.message}`, "error");
+          }
+        }
+      );
     }
   });
 }
 
 async function loadStudentProfile(studentId) {
   if (!studentId) return;
+
+  if (profileDetailsBody) {
+    profileDetailsBody.innerHTML = `<tr><td class="table-status" colspan="2">Loading profile...</td></tr>`;
+  }
+  if (profilePaymentsBody)
+    setTableStatus(profilePaymentsBody, 6, "Loading payments...");
+  if (profileResultsBody)
+    setTableStatus(profileResultsBody, 6, "Loading results...");
 
   const student = studentsCache.find((s) => String(s.id) === String(studentId));
   if (!student) {
@@ -609,27 +883,39 @@ async function loadStudentProfile(studentId) {
       <tr><th>Guardian</th><td>${student.guardian_name || "-"}</td></tr>
       <tr><th>Guardian phone</th><td>${student.guardian_phone || "-"}</td></tr>
     `;
+    applyMobileTableLabels(profileDetailsBody);
   }
 
   if (profilePaymentsBody) {
     try {
       const res = await authFetch(`${API}/payments/student/${studentId}`);
       const payments = await safeJson(res);
-      profilePaymentsBody.innerHTML = (payments || [])
-        .map(
-          (p) => `
-          <tr>
-            <td>${p.term || "-"}</td>
-            <td>${p.session || "-"}</td>
-            <td>${p.payment_type || "-"}</td>
-            <td>${Number(p.amount_paid || 0)}</td>
-            <td>${Number(p.amount_remaining || 0)}</td>
-            <td>${p.payment_date || "-"}</td>
-          </tr>`
-        )
-        .join("");
+
+      const list = payments || [];
+      if (!list.length) {
+        setTableStatus(profilePaymentsBody, 6, "No payments recorded yet.");
+      } else {
+        profilePaymentsBody.innerHTML = list
+          .map(
+            (p) => `
+            <tr>
+              <td>${p.term || "-"}</td>
+              <td>${p.session || "-"}</td>
+              <td>${p.payment_type || "-"}</td>
+              <td>${Number(p.amount_paid || 0)}</td>
+              <td>${Number(p.amount_remaining || 0)}</td>
+              <td>${p.payment_date || "-"}</td>
+            </tr>`
+          )
+          .join("");
+        applyMobileTableLabels(profilePaymentsBody);
+      }
     } catch (err) {
-      profilePaymentsBody.innerHTML = `<tr><td colspan="6">Failed to load payments: ${err.message}</td></tr>`;
+      setTableStatus(
+        profilePaymentsBody,
+        6,
+        `Failed to load payments: ${err.message}`
+      );
     }
   }
 
@@ -637,46 +923,67 @@ async function loadStudentProfile(studentId) {
     try {
       const res = await authFetch(`${API}/results/student/${studentId}`);
       const results = await safeJson(res);
-      profileResultsBody.innerHTML = (results || [])
-        .map(
-          (r) => `
-          <tr>
-            <td>${r.term || "-"}</td>
-            <td>${r.session || "-"}</td>
-            <td>${Number(r.test_score || 0)}</td>
-            <td>${Number(r.exam_score || 0)}</td>
-            <td>${Number(r.total_score || 0)}</td>
-            <td>${r.created_at || "-"}</td>
-          </tr>`
-        )
-        .join("");
+
+      const list = results || [];
+      if (!list.length) {
+        setTableStatus(profileResultsBody, 6, "No results recorded yet.");
+      } else {
+        profileResultsBody.innerHTML = list
+          .map(
+            (r) => `
+            <tr>
+              <td>${r.term || "-"}</td>
+              <td>${r.session || "-"}</td>
+              <td>${Number(r.test_score || 0)}</td>
+              <td>${Number(r.exam_score || 0)}</td>
+              <td>${Number(r.total_score || 0)}</td>
+              <td>${r.created_at || "-"}</td>
+            </tr>`
+          )
+          .join("");
+        applyMobileTableLabels(profileResultsBody);
+      }
     } catch (err) {
-      profileResultsBody.innerHTML = `<tr><td colspan="6">Failed to load results: ${err.message}</td></tr>`;
+      setTableStatus(
+        profileResultsBody,
+        6,
+        `Failed to load results: ${err.message}`
+      );
     }
   }
 }
 
 async function loadPayments() {
+  setTableStatus(paymentTableBody, 5, "Loading payment summary...");
   const res = await authFetch(`${API}/payments/summary`);
   const payments = await safeJson(res).catch((err) => {
-    alert(`Failed to load payments: ${err.message}`);
+    notify(`Failed to load payments: ${err.message}`, "error");
+    setTableStatus(paymentTableBody, 5, "Failed to load payment summary.");
     return [];
   });
   if (!payments) return;
+  if (!payments.length) {
+    setTableStatus(
+      paymentTableBody,
+      5,
+      "No payment records yet. Record a payment to see summaries here."
+    );
+    return;
+  }
   paymentTableBody.innerHTML = payments
     .map((p) => {
       const totalPaid = Number(p.total_paid || 0);
       const totalRemaining = Number(p.total_remaining || 0);
-      let status = "status-unpaid";
+      let status = "unpaid";
       let statusLabel = "UNPAID";
 
       if (totalPaid > 0 && totalRemaining > 0) {
-        status = "status-partial";
+        status = "partial";
         statusLabel = "PARTIAL";
       }
 
       if (totalPaid > 0 && totalRemaining === 0) {
-        status = "status-paid";
+        status = "paid";
         statusLabel = "PAID";
       }
 
@@ -686,27 +993,32 @@ async function loadPayments() {
       <td>${p.full_name}</td>
       <td>${totalPaid}</td>
       <td>${totalRemaining}</td>
-      <td class="${status}">${statusLabel}</td>
+      <td><span class="badge badge--${status}">${statusLabel}</span></td>
     </tr>`;
     })
     .join("");
+  applyMobileTableLabels(paymentTableBody);
 }
 
 studentForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const formData = Object.fromEntries(new FormData(studentForm).entries());
-  try {
-    await authFetch(`${API}/students`, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify(formData),
-    }).then(safeJson);
-  } catch (err) {
-    alert(`Could not add student: ${err.message}`);
-    return;
-  }
-  studentForm.reset();
-  await loadAllData();
+
+  await runWithFormBusy(studentForm, "Saving...", async () => {
+    try {
+      await authFetch(`${API}/students`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify(formData),
+      }).then(safeJson);
+    } catch (err) {
+      notify(`Could not add student: ${err.message}`, "error");
+      return;
+    }
+    studentForm.reset();
+    notify("Student added", "success");
+    await loadAllData();
+  });
 });
 
 paymentForm.addEventListener("submit", async (e) => {
@@ -716,14 +1028,23 @@ paymentForm.addEventListener("submit", async (e) => {
     data.payment_type = "full";
     data.amount_remaining = 0;
   }
-  await authFetch(`${API}/payments`, {
-    method: "POST",
-    headers: authHeaders,
-    body: JSON.stringify(data),
+
+  await runWithFormBusy(paymentForm, "Saving...", async () => {
+    try {
+      await authFetch(`${API}/payments`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify(data),
+      }).then(safeJson);
+    } catch (err) {
+      notify(`Could not save payment: ${err.message}`, "error");
+      return;
+    }
+    paymentForm.reset();
+    syncHalfFields();
+    notify("Payment saved", "success");
+    await loadPayments();
   });
-  paymentForm.reset();
-  syncHalfFields();
-  await loadPayments();
 });
 
 if (resultForm) {
@@ -738,53 +1059,60 @@ if (resultForm) {
     const examScore = Number(resultExamInput?.value ?? 0);
 
     if (!classId || !studentId || !term || !session) {
-      alert("Please select class, student, term, and session.");
+      notify("Please select class, student, term, and session.", "warning");
       return;
     }
 
     if (!Number.isFinite(testScore) || !Number.isFinite(examScore)) {
-      alert("Please enter valid numeric scores.");
+      notify("Please enter valid numeric scores.", "warning");
       return;
     }
 
-    try {
-      await authFetch(`${API}/results`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          student_id: Number(studentId),
-          term,
-          session,
-          test_score: testScore,
-          exam_score: examScore,
-        }),
-      }).then(safeJson);
-    } catch (err) {
-      alert(`Could not save result: ${err.message}`);
-      return;
-    }
+    await runWithFormBusy(resultForm, "Saving...", async () => {
+      try {
+        await authFetch(`${API}/results`, {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({
+            student_id: Number(studentId),
+            term,
+            session,
+            test_score: testScore,
+            exam_score: examScore,
+          }),
+        }).then(safeJson);
+      } catch (err) {
+        notify(`Could not save result: ${err.message}`, "error");
+        return;
+      }
 
-    resultTestInput.value = "";
-    resultExamInput.value = "";
-    await loadClassResults();
+      resultTestInput.value = "";
+      resultExamInput.value = "";
+      notify("Result saved", "success");
+      await loadClassResults();
+    });
   });
 }
 
 classForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const data = Object.fromEntries(new FormData(classForm).entries());
-  try {
-    await authFetch(`${API}/classes`, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify(data),
-    }).then(safeJson);
-  } catch (err) {
-    alert(`Could not add class: ${err.message}`);
-    return;
-  }
-  classForm.reset();
-  await loadAllData();
+
+  await runWithFormBusy(classForm, "Saving...", async () => {
+    try {
+      await authFetch(`${API}/classes`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify(data),
+      }).then(safeJson);
+    } catch (err) {
+      notify(`Could not add class: ${err.message}`, "error");
+      return;
+    }
+    classForm.reset();
+    notify("Class added", "success");
+    await loadAllData();
+  });
 });
 
 studentSearch.addEventListener("input", (e) => {
@@ -809,6 +1137,13 @@ studentsTableBody.addEventListener("click", async (e) => {
   const id = e.target.dataset.id;
 
   if (e.target.classList.contains("view-student")) {
+    const student = (studentsCache || []).find(
+      (s) => String(s.id) === String(id)
+    );
+    if (student && profileClassSelect) {
+      profileClassSelect.value = String(student.class_id || "");
+      populateStudentsForClass(profileStudentSelect, student.class_id);
+    }
     if (profileStudentSelect) profileStudentSelect.value = String(id);
     await loadStudentProfile(id);
     const tabBtn = document.querySelector('[data-tab="studentProfileTab"]');
@@ -840,10 +1175,11 @@ studentsTableBody.addEventListener("click", async (e) => {
         body: JSON.stringify(payload),
       }).then(safeJson);
     } catch (err) {
-      alert(`Update failed: ${err.message}`);
+      notify(`Update failed: ${err.message}`, "error");
       return;
     }
 
+    notify("Student updated", "success");
     await loadAllData();
   }
 
@@ -855,9 +1191,10 @@ studentsTableBody.addEventListener("click", async (e) => {
         headers: authHeaders,
       }).then(safeJson);
     } catch (err) {
-      alert(`Delete failed: ${err.message}`);
+      notify(`Delete failed: ${err.message}`, "error");
       return;
     }
+    notify("Student deleted", "success");
     await loadAllData();
   }
 });
@@ -873,26 +1210,29 @@ if (staffForm) {
   staffForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (role !== "admin") {
-      alert("Only admin can create staff.");
+      notify("Only admin can create staff.", "warning");
       return;
     }
     const data = Object.fromEntries(new FormData(staffForm).entries());
-    try {
-      await authFetch(`${API}/users`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          username: String(data.username || "").trim(),
-          password: data.password,
-          role: data.role,
-        }),
-      }).then(safeJson);
-    } catch (err) {
-      alert(`Could not create staff: ${err.message}`);
-      return;
-    }
-    staffForm.reset();
-    await loadUsers();
+    await runWithFormBusy(staffForm, "Creating...", async () => {
+      try {
+        await authFetch(`${API}/users`, {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({
+            username: String(data.username || "").trim(),
+            password: data.password,
+            role: data.role,
+          }),
+        }).then(safeJson);
+      } catch (err) {
+        notify(`Could not create staff: ${err.message}`, "error");
+        return;
+      }
+      staffForm.reset();
+      notify("Staff created", "success");
+      await loadUsers();
+    });
   });
 }
 
@@ -902,9 +1242,9 @@ async function seedDefaults() {
       safeJson
     );
     await loadAllData();
-    alert("Default classes ensured (JSS1-SS3 A/B)");
+    notify("Default classes ensured (JSS1-SS3 A/B)", "success");
   } catch (err) {
-    alert(`Seeding failed: ${err.message}`);
+    notify(`Seeding failed: ${err.message}`, "error");
   }
 }
 
@@ -928,7 +1268,6 @@ async function loadAllData() {
   await loadMe();
   await loadClasses();
   enforceTeacherClassLock();
-  await loadStudents();
   await loadStudentSelect();
   await loadPayments();
   await loadClassResults();

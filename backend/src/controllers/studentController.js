@@ -15,11 +15,9 @@ exports.addStudent = (req, res) => {
       student.class_id &&
       Number(student.class_id) !== Number(assignedClassId)
     ) {
-      return res
-        .status(403)
-        .json({
-          message: "Teachers can only add students to their assigned class",
-        });
+      return res.status(403).json({
+        message: "Teachers can only add students to their assigned class",
+      });
     }
 
     student.class_id = Number(assignedClassId);

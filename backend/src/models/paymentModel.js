@@ -1,28 +1,111 @@
 const db = require("./db");
 
 const ensurePaymentSchema = () => {
-  db.all("PRAGMA table_info(payments)", (err, rows) => {
-    if (err) return;
+  db.serialize(() => {
+    db.run(
+      `CREATE TABLE IF NOT EXISTS payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        amount_paid REAL NOT NULL,
+        amount_remaining REAL DEFAULT 0,
+        payment_type TEXT DEFAULT 'full',
+        term TEXT NOT NULL,
+        session TEXT NOT NULL,
+        payment_date TEXT
+      )`
+    );
 
-    const columns = rows.map((r) => r.name);
-    const migrations = [];
+    db.all("PRAGMA table_info(payments)", (err, rows) => {
+      if (err) return;
 
-    if (!columns.includes("payment_type")) {
-      migrations.push(
-        "ALTER TABLE payments ADD COLUMN payment_type TEXT DEFAULT 'full'"
-      );
-    }
+      const columns = rows.map((r) => r.name);
+      const migrations = [];
 
-    if (!columns.includes("amount_remaining")) {
-      migrations.push(
-        "ALTER TABLE payments ADD COLUMN amount_remaining REAL DEFAULT 0"
-      );
-    }
+      if (!columns.includes("payment_type")) {
+        migrations.push(
+          "ALTER TABLE payments ADD COLUMN payment_type TEXT DEFAULT 'full'"
+        );
+      }
 
-    migrations.forEach((sql) => {
-      db.run(sql, (alterErr) => {
-        if (alterErr) console.error("Schema migration failed", alterErr);
+      if (!columns.includes("amount_remaining")) {
+        migrations.push(
+          "ALTER TABLE payments ADD COLUMN amount_remaining REAL DEFAULT 0"
+        );
+      }
+
+      migrations.forEach((sql) => {
+        db.run(sql, (alterErr) => {
+          if (alterErr) console.error("Schema migration failed", alterErr);
+        });
       });
+
+      // Dedupe any existing duplicates so we can safely enforce uniqueness.
+      // Rule: keep the most "settled" row (smallest remaining); tiebreak by latest date.
+      db.all(
+        `SELECT student_id, term, session, COUNT(*) AS c
+       FROM payments
+       GROUP BY student_id, term, session
+       HAVING c > 1`,
+        (dupErr, groups) => {
+          if (dupErr) {
+            console.error("Payments dedupe scan failed", dupErr);
+            return;
+          }
+
+          const tasks = (groups || []).map(
+            (g) =>
+              new Promise((resolve) => {
+                db.all(
+                  `SELECT id, amount_remaining, payment_date
+                 FROM payments
+                 WHERE student_id = ? AND term = ? AND session = ?`,
+                  [g.student_id, g.term, g.session],
+                  (rowsErr, payRows) => {
+                    if (rowsErr || !payRows || payRows.length < 2)
+                      return resolve();
+
+                    const best = [...payRows].sort((a, b) => {
+                      const ar = Number(a.amount_remaining ?? 0);
+                      const br = Number(b.amount_remaining ?? 0);
+                      if (ar !== br) return ar - br;
+                      const ad = Date.parse(a.payment_date || "") || 0;
+                      const bd = Date.parse(b.payment_date || "") || 0;
+                      if (ad !== bd) return bd - ad;
+                      return b.id - a.id;
+                    })[0];
+
+                    const deleteIds = payRows
+                      .filter((r) => r.id !== best.id)
+                      .map((r) => r.id);
+                    if (deleteIds.length === 0) return resolve();
+
+                    db.run(
+                      `DELETE FROM payments WHERE id IN (${deleteIds
+                        .map(() => "?")
+                        .join(",")})`,
+                      deleteIds,
+                      () => resolve()
+                    );
+                  }
+                );
+              })
+          );
+
+          Promise.all(tasks).finally(() => {
+            db.run(
+              `CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_student_term_session
+             ON payments(student_id, term, session)`,
+              (idxErr) => {
+                if (idxErr)
+                  console.error(
+                    "Failed to create unique payment index",
+                    idxErr
+                  );
+              }
+            );
+          });
+        }
+      );
     });
   });
 };
@@ -42,6 +125,12 @@ const Payment = {
         payment_date
       )
       VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(student_id, term, session)
+      DO UPDATE SET
+        amount_paid = excluded.amount_paid,
+        amount_remaining = excluded.amount_remaining,
+        payment_type = excluded.payment_type,
+        payment_date = excluded.payment_date
     `;
     const values = [
       payment.student_id,
@@ -54,13 +143,23 @@ const Payment = {
     ];
 
     db.run(sql, values, function (err) {
-      callback(err, { id: this.lastID });
+      if (err) return callback(err);
+
+      db.get(
+        `SELECT id FROM payments WHERE student_id = ? AND term = ? AND session = ?`,
+        [payment.student_id, payment.term, payment.session],
+        (getErr, row) => {
+          if (getErr) return callback(getErr);
+          callback(null, { id: row?.id });
+        }
+      );
     });
   },
 
   getAllByStudent: (student_id, callback) => {
     const sql = `
       SELECT * FROM payments WHERE student_id = ?
+      ORDER BY datetime(payment_date) DESC, id DESC
     `;
     db.all(sql, [student_id], callback);
   },
