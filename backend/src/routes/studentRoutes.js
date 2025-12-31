@@ -20,7 +20,7 @@ router.put(
 );
 router.patch(
   "/students/:id",
-  auth(["admin", "account"]),
+  auth(["admin", "account", "teacher"]),
   studentController.updateStudent
 );
 router.delete(

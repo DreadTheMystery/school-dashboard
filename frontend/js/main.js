@@ -1,11 +1,40 @@
 function applyRoleUI() {
   if (!role) return;
   if (role === "teacher") {
+    const classesTabBtn = document.querySelector('[data-tab="classesTab"]');
+    if (classesTabBtn) classesTabBtn.textContent = "Report Card";
+    const classesTabTitle = document.querySelector(
+      "#classesTab .section-header h2"
+    );
+    if (classesTabTitle) classesTabTitle.textContent = "Report Card";
+    const classesTabNote = document.querySelector(
+      "#classesTab .section-header .section-note"
+    );
+    if (classesTabNote)
+      classesTabNote.textContent =
+        "Generate and print student report cards before holiday.";
+
+    if (classesAdminGrid) classesAdminGrid.style.display = "none";
+    if (reportCardGrid) reportCardGrid.style.display = "grid";
+    if (reportReviewGrid) reportReviewGrid.style.display = "none";
+
     classForm.style.display = "none";
-    paymentForm.style.display = "none";
+    // Teachers can only view payment summary; hide record-payment UI entirely
+    if (paymentForm) {
+      const paymentCard = paymentForm.closest(".card");
+      if (paymentCard) paymentCard.style.display = "none";
+      paymentForm.style.display = "none";
+    }
+    if (profileQuickPayBtn) profileQuickPayBtn.style.display = "none";
     document
       .querySelectorAll(".edit-student, .delete-student")
       .forEach((btn) => btn.remove());
+  }
+
+  if (role === "admin") {
+    if (classesAdminGrid) classesAdminGrid.style.display = "grid";
+    if (reportCardGrid) reportCardGrid.style.display = "none";
+    if (reportReviewGrid) reportReviewGrid.style.display = "grid";
   }
 
   if (role === "account") {
@@ -44,6 +73,7 @@ const studentSelect = document.getElementById("studentSelect");
 const paymentTableBody = document.querySelector("#paymentTable tbody");
 const paymentSearch = document.getElementById("paymentSearch");
 const amountRemainingInput = document.getElementById("amountRemaining");
+const amountPaidInput = document.getElementById("amountPaid");
 const paymentTypeInputs = document.querySelectorAll(
   'input[name="payment_type"]'
 );
@@ -69,9 +99,38 @@ const profilePaymentsBody = document.querySelector(
 );
 const profileResultsBody = document.querySelector("#profileResultsTable tbody");
 
+const profileQuickPayBtn = document.getElementById("profileQuickPay");
+const profileQuickResultBtn = document.getElementById("profileQuickResult");
+const profilePhotoInput = document.getElementById("profilePhotoInput");
+const profilePhotoBtn = document.getElementById("profilePhotoBtn");
+const profileAvatarImg = document.getElementById("profileAvatarImg");
+const profileAvatarFallback = document.getElementById("profileAvatarFallback");
+
+let currentProfileStudentId = null;
+let currentProfileClassId = null;
+
 const paymentClassSelect = document.getElementById("paymentClassSelect");
 
 const seedClassesBtn = document.getElementById("seedClassesBtn");
+const classesAdminGrid = document.getElementById("classesAdminGrid");
+const reportCardGrid = document.getElementById("reportCardGrid");
+const reportReviewGrid = document.getElementById("reportReviewGrid");
+const reportForm = document.getElementById("reportForm");
+const reportStudentSelect = document.getElementById("reportStudentSelect");
+const reportTermInput = document.getElementById("reportTerm");
+const reportSessionInput = document.getElementById("reportSession");
+const reportGenerateBtn = document.getElementById("reportGenerateBtn");
+const reportSaveBtn = document.getElementById("reportSaveBtn");
+const reportSubmitBtn = document.getElementById("reportSubmitBtn");
+const reportPrintBtn = document.getElementById("reportPrintBtn");
+const reportPreview = document.getElementById("reportPreview");
+const reportStatusPill = document.getElementById("reportStatusPill");
+
+const adminReportStatus = document.getElementById("adminReportStatus");
+const adminReportTableBody = document.querySelector("#adminReportTable tbody");
+const adminReportPreview = document.getElementById("adminReportPreview");
+const adminApproveBtn = document.getElementById("adminApproveBtn");
+const adminPrintBtn = document.getElementById("adminPrintBtn");
 
 const roleBadge = document.getElementById("roleBadge");
 const logoutBtn = document.getElementById("logoutBtn");
@@ -231,10 +290,799 @@ const authHeaders = token
 let classesCache = [];
 let studentsCache = [];
 let meCache = null;
+let reportUIInitialized = false;
+let currentTeacherReportId = null;
+let currentTeacherReportStatus = null;
+let adminSelectedReportId = null;
 
 function setSelectPlaceholder(selectEl, text) {
   if (!selectEl) return;
   selectEl.innerHTML = `<option value="" disabled selected>${text}</option>`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function gradeFromPercent(percent) {
+  const n = Number(percent);
+  if (!Number.isFinite(n)) return "-";
+  if (n >= 70) return "A";
+  if (n >= 60) return "B";
+  if (n >= 50) return "C";
+  if (n >= 45) return "D";
+  if (n >= 40) return "E";
+  return "F";
+}
+
+function statusLabel(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "approved") return "Approved";
+  if (s === "submitted") return "Submitted";
+  return "Draft";
+}
+
+function setReportStatus(status) {
+  currentTeacherReportStatus = status || null;
+  if (!reportStatusPill) return;
+  reportStatusPill.style.display = "inline-flex";
+  reportStatusPill.textContent = `Status: ${statusLabel(status)}`;
+}
+
+function defaultSubjects() {
+  // NOTE: Replace these to match your exact report-card picture.
+  return [
+    "English Language",
+    "Mathematics",
+    "Basic Science",
+    "Basic Technology",
+    "Social Studies",
+    "Civic Education",
+    "Computer Studies",
+    "Agricultural Science",
+    "C.R.S / I.R.S",
+    "Home Economics",
+    "Creative Arts",
+    "Physical & Health Education",
+  ];
+}
+
+function defaultAffectiveTraits() {
+  return [
+    "Punctuality",
+    "Attendance",
+    "Attentiveness",
+    "Honesty",
+    "Neatness",
+    "Politeness",
+    "Self Control",
+    "Relationship with others",
+  ];
+}
+
+function defaultPsychomotorTraits() {
+  return [
+    "Handwriting",
+    "Sports",
+    "Handling tools",
+    "Drawing/painting",
+    "Musical skills",
+  ];
+}
+
+function ratingSelectHtml(value) {
+  const v = String(value ?? "");
+  const opts = [
+    { k: "", t: "-" },
+    { k: "5", t: "5" },
+    { k: "4", t: "4" },
+    { k: "3", t: "3" },
+    { k: "2", t: "2" },
+    { k: "1", t: "1" },
+  ];
+  return `<select class="report-input" data-role="rating">${opts
+    .map(
+      (o) =>
+        `<option value="${o.k}" ${o.k === v ? "selected" : ""}>${o.t}</option>`
+    )
+    .join("")}</select>`;
+}
+
+function normalizeScore(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, n));
+}
+
+function computeGrade(total) {
+  return gradeFromPercent(total);
+}
+
+function renderTeacherReportTemplate({ student, term, session, payload }) {
+  const p = payload || {};
+  const subjects =
+    Array.isArray(p.subjects) && p.subjects.length
+      ? p.subjects
+      : defaultSubjects().map((name) => ({ name, ca: "", exam: "" }));
+
+  const attendance = p.attendance || {};
+  const affective = p.affective || {};
+  const psychomotor = p.psychomotor || {};
+
+  const teacherName = p.teacher_name || meCache?.username || "";
+  const principalName = p.principal_name || "";
+  const teacherRemark = p.teacher_remark || "";
+  const principalRemark = p.principal_remark || "";
+
+  const classLabel = student?.class_name
+    ? `${student.class_name} ${student.arm || ""}`
+    : "-";
+
+  const photoHtml = student?.photo_data_url
+    ? `<img src="${escapeHtml(student.photo_data_url)}" alt="Student photo" />`
+    : `<span class="pill pill--active">No photo</span>`;
+
+  const subjectRows = subjects
+    .map((row, idx) => {
+      const ca = row?.ca ?? "";
+      const exam = row?.exam ?? "";
+      const total = normalizeScore(ca) * 0.4 + normalizeScore(exam) * 0.6;
+      const computedGrade = computeGrade(total);
+      const manualGrade = String(row?.grade ?? "").trim();
+      const grade = manualGrade || computedGrade;
+      const isManual = String(row?.grade_manual ?? "") === "1";
+      return `
+        <tr data-subject-idx="${idx}">
+          <td><input class="report-input" data-field="subject.name" value="${escapeHtml(
+            row?.name || ""
+          )}" /></td>
+          <td style="width:90px"><input class="report-input" data-field="subject.ca" inputmode="decimal" value="${escapeHtml(
+            ca
+          )}" placeholder="0-100" /></td>
+          <td style="width:90px"><input class="report-input" data-field="subject.exam" inputmode="decimal" value="${escapeHtml(
+            exam
+          )}" placeholder="0-100" /></td>
+          <td style="width:90px"><input class="report-input" data-field="subject.total" value="${total.toFixed(
+            0
+          )}" readonly /></td>
+          <td style="width:70px"><input class="report-input" data-field="subject.grade" value="${escapeHtml(
+            grade
+          )}" data-manual="${isManual ? "1" : "0"}" placeholder="A-F" /></td>
+          <td><input class="report-input" data-field="subject.remark" value="${escapeHtml(
+            row?.remark || ""
+          )}" placeholder="Remark" /></td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const affectiveRows = defaultAffectiveTraits()
+    .map((t) => {
+      const key = t;
+      return `
+        <tr>
+          <td>${escapeHtml(t)}</td>
+          <td style="width:120px">${ratingSelectHtml(affective[key])}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const psychomotorRows = defaultPsychomotorTraits()
+    .map((t) => {
+      const key = t;
+      return `
+        <tr>
+          <td>${escapeHtml(t)}</td>
+          <td style="width:120px">${ratingSelectHtml(psychomotor[key])}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `
+    <div class="report-sheet" data-report="teacher">
+      <div class="report-head">
+        <div>
+          <p class="eyebrow">Student's performance report</p>
+          <h3 class="report-title">Report Card</h3>
+          <p class="report-subtitle">Term: ${escapeHtml(
+            term
+          )} · Session: ${escapeHtml(session)}</p>
+        </div>
+        <div class="report-photo">${photoHtml}</div>
+      </div>
+
+      <div class="report-grid">
+        <div class="report-kv"><p>Name</p><strong>${escapeHtml(
+          student?.full_name
+        )}</strong></div>
+        <div class="report-kv"><p>Admission No</p><strong>${escapeHtml(
+          student?.admission_no
+        )}</strong></div>
+        <div class="report-kv"><p>Class</p><strong>${escapeHtml(
+          classLabel
+        )}</strong></div>
+        <div class="report-kv"><p>Gender</p><strong>${escapeHtml(
+          student?.gender || "-"
+        )}</strong></div>
+      </div>
+
+      <table class="report-table" aria-label="Cognitive domain">
+        <thead>
+          <tr>
+            <th>COGNITIVE DOMAIN (40% CA / 60% Exam)</th>
+            <th style="width:90px">CA</th>
+            <th style="width:90px">EXAM</th>
+            <th style="width:90px">TOTAL</th>
+            <th style="width:70px">GRADE</th>
+            <th>REMARKS</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${subjectRows}
+        </tbody>
+      </table>
+
+      <table class="report-table" aria-label="Attendance summary">
+        <thead>
+          <tr><th colspan="2">ATTENDANCE SUMMARY</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>No. of times school opened</td>
+            <td><input class="report-input" data-field="attendance.opened" value="${escapeHtml(
+              attendance.opened || ""
+            )}" placeholder="e.g. 150" /></td>
+          </tr>
+          <tr>
+            <td>No. of times present</td>
+            <td><input class="report-input" data-field="attendance.present" value="${escapeHtml(
+              attendance.present || ""
+            )}" placeholder="e.g. 150" /></td>
+          </tr>
+          <tr>
+            <td>No. of times absent</td>
+            <td><input class="report-input" data-field="attendance.absent" value="${escapeHtml(
+              attendance.absent || ""
+            )}" placeholder="e.g. 0" /></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table class="report-table" aria-label="Affective domain">
+        <thead>
+          <tr><th>AFFECTIVE DOMAIN</th><th style="width:120px">RATING (1-5)</th></tr>
+        </thead>
+        <tbody>${affectiveRows}</tbody>
+      </table>
+
+      <table class="report-table" aria-label="Psychomotor domain">
+        <thead>
+          <tr><th>PSYCHOMOTOR DOMAIN</th><th style="width:120px">RATING (1-5)</th></tr>
+        </thead>
+        <tbody>${psychomotorRows}</tbody>
+      </table>
+
+      <table class="report-table" aria-label="Remarks">
+        <thead>
+          <tr><th>REMARKS</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <p class="section-note" style="margin:0 0 8px">Teacher's remark</p>
+              <textarea class="report-textarea" data-field="teacher_remark" placeholder="Write teacher remark...">${escapeHtml(
+                teacherRemark
+              )}</textarea>
+              <div style="height:10px"></div>
+              <p class="section-note" style="margin:0 0 8px">Principal's remark</p>
+              <textarea class="report-textarea" data-field="principal_remark" placeholder="Write principal remark...">${escapeHtml(
+                principalRemark
+              )}</textarea>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table class="report-table" aria-label="Signatures">
+        <tbody>
+          <tr>
+            <td style="width: 50%">Teacher's name: <input class="report-input" data-field="teacher_name" value="${escapeHtml(
+              teacherName
+            )}" placeholder="Name" /></td>
+            <td>Sign: <input class="report-input" data-field="teacher_sign" value="${escapeHtml(
+              p.teacher_sign || ""
+            )}" placeholder="Signature" /></td>
+          </tr>
+          <tr>
+            <td>Principal's name: <input class="report-input" data-field="principal_name" value="${escapeHtml(
+              principalName
+            )}" placeholder="Name" /></td>
+            <td>Sign: <input class="report-input" data-field="principal_sign" value="${escapeHtml(
+              p.principal_sign || ""
+            )}" placeholder="Signature" /></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="report-subtitle">Grade scale: 70–100 A, 60–69 B, 50–59 C, 45–49 D, 40–44 E, 0–39 F</p>
+    </div>
+  `;
+}
+
+function collectTeacherReportPayload() {
+  if (!reportPreview) return null;
+  const root = reportPreview.querySelector('[data-report="teacher"]');
+  if (!root) return null;
+
+  const payload = {
+    subjects: [],
+    attendance: {},
+    affective: {},
+    psychomotor: {},
+  };
+
+  // Subjects
+  root.querySelectorAll("tr[data-subject-idx]").forEach((tr) => {
+    const name = tr.querySelector('[data-field="subject.name"]')?.value ?? "";
+    const ca = tr.querySelector('[data-field="subject.ca"]')?.value ?? "";
+    const exam = tr.querySelector('[data-field="subject.exam"]')?.value ?? "";
+    const grade = tr.querySelector('[data-field="subject.grade"]')?.value ?? "";
+    const gradeManual =
+      tr.querySelector('[data-field="subject.grade"]')?.dataset?.manual === "1"
+        ? "1"
+        : "0";
+    const remark =
+      tr.querySelector('[data-field="subject.remark"]')?.value ?? "";
+    payload.subjects.push({
+      name: String(name).trim(),
+      ca: String(ca).trim(),
+      exam: String(exam).trim(),
+      grade: String(grade).trim(),
+      grade_manual: gradeManual,
+      remark: String(remark).trim(),
+    });
+  });
+
+  // Attendance
+  payload.attendance.opened =
+    root.querySelector('[data-field="attendance.opened"]')?.value ?? "";
+  payload.attendance.present =
+    root.querySelector('[data-field="attendance.present"]')?.value ?? "";
+  payload.attendance.absent =
+    root.querySelector('[data-field="attendance.absent"]')?.value ?? "";
+
+  // Remarks + signatures
+  payload.teacher_remark =
+    root.querySelector('[data-field="teacher_remark"]')?.value ?? "";
+  payload.principal_remark =
+    root.querySelector('[data-field="principal_remark"]')?.value ?? "";
+  payload.teacher_name =
+    root.querySelector('[data-field="teacher_name"]')?.value ?? "";
+  payload.teacher_sign =
+    root.querySelector('[data-field="teacher_sign"]')?.value ?? "";
+  payload.principal_name =
+    root.querySelector('[data-field="principal_name"]')?.value ?? "";
+  payload.principal_sign =
+    root.querySelector('[data-field="principal_sign"]')?.value ?? "";
+
+  // Ratings tables
+  const affectiveRows = root.querySelectorAll(
+    'table[aria-label="Affective domain"] tbody tr'
+  );
+  affectiveRows.forEach((tr) => {
+    const trait = tr.querySelector("td")?.textContent?.trim();
+    const val = tr.querySelector('select[data-role="rating"]')?.value ?? "";
+    if (!trait) return;
+    payload.affective[trait] = val;
+  });
+
+  const psychoRows = root.querySelectorAll(
+    'table[aria-label="Psychomotor domain"] tbody tr'
+  );
+  psychoRows.forEach((tr) => {
+    const trait = tr.querySelector("td")?.textContent?.trim();
+    const val = tr.querySelector('select[data-role="rating"]')?.value ?? "";
+    if (!trait) return;
+    payload.psychomotor[trait] = val;
+  });
+
+  return payload;
+}
+
+function recalcSubjectRow(tr) {
+  const caVal = tr.querySelector('[data-field="subject.ca"]')?.value;
+  const examVal = tr.querySelector('[data-field="subject.exam"]')?.value;
+  const total = normalizeScore(caVal) * 0.4 + normalizeScore(examVal) * 0.6;
+  const grade = computeGrade(total);
+  const totalEl = tr.querySelector('[data-field="subject.total"]');
+  const gradeEl = tr.querySelector('[data-field="subject.grade"]');
+  if (totalEl) totalEl.value = total.toFixed(0);
+  if (gradeEl) {
+    const isManual = gradeEl.dataset.manual === "1";
+    const hasManualValue = String(gradeEl.value || "").trim().length > 0;
+    if (!isManual || !hasManualValue) {
+      gradeEl.value = grade;
+      gradeEl.dataset.manual = "0";
+    }
+  }
+}
+
+function bindReportAutoCalc() {
+  if (!reportPreview) return;
+  reportPreview.addEventListener("input", (e) => {
+    const target = e.target;
+    if (!target) return;
+    const tr = target.closest?.("tr[data-subject-idx]");
+    if (!tr) return;
+    const field = target.getAttribute?.("data-field") || "";
+    if (field === "subject.ca" || field === "subject.exam") {
+      recalcSubjectRow(tr);
+    }
+    if (field === "subject.grade") {
+      target.dataset.manual = "1";
+      // normalize grade to single uppercase letter if possible
+      const v = String(target.value || "").trim();
+      if (v) target.value = v[0].toUpperCase();
+    }
+  });
+}
+
+function renderAdminReadonlyTemplate({ report }) {
+  const payload = report?.payload || {};
+  const student = {
+    full_name: report?.full_name,
+    admission_no: report?.admission_no,
+    gender: report?.gender,
+    photo_data_url: report?.photo_data_url,
+    class_name: report?.class_name,
+    arm: report?.class_arm,
+  };
+
+  // Reuse teacher template but replace inputs with plain text by rendering it and then disabling.
+  const html = renderTeacherReportTemplate({
+    student,
+    term: report?.term,
+    session: report?.session,
+    payload,
+  });
+  return html;
+}
+
+function populateReportStudents() {
+  if (!reportStudentSelect) return;
+  if (role !== "teacher") return;
+
+  const list = studentsCache || [];
+  if (!list.length) {
+    setSelectPlaceholder(reportStudentSelect, "No students found");
+    return;
+  }
+
+  reportStudentSelect.innerHTML =
+    '<option value="" disabled selected>Select student</option>' +
+    list
+      .map(
+        (s) =>
+          `<option value="${s.id}">${escapeHtml(s.full_name)} (${escapeHtml(
+            s.admission_no
+          )})</option>`
+      )
+      .join("");
+}
+
+async function buildReportPreview() {
+  if (!reportPreview) return;
+
+  const studentId = reportStudentSelect?.value;
+  const term = reportTermInput?.value?.trim();
+  const session = reportSessionInput?.value?.trim();
+
+  if (!studentId || !term || !session) {
+    reportPreview.innerHTML =
+      '<div class="report-sheet"><p class="section-note">Select student, term, and session, then load the template.</p></div>';
+    if (reportPrintBtn) reportPrintBtn.disabled = true;
+    if (reportSaveBtn) reportSaveBtn.disabled = true;
+    if (reportSubmitBtn) reportSubmitBtn.disabled = true;
+    if (reportStatusPill) reportStatusPill.style.display = "none";
+    currentTeacherReportId = null;
+    currentTeacherReportStatus = null;
+    return;
+  }
+
+  const student = (studentsCache || []).find(
+    (s) => String(s.id) === String(studentId)
+  );
+
+  if (!student) {
+    reportPreview.innerHTML =
+      '<div class="report-sheet"><p class="section-note">Student not found.</p></div>';
+    if (reportPrintBtn) reportPrintBtn.disabled = true;
+    return;
+  }
+
+  // Try to load existing draft/submission for this student+term+session
+  currentTeacherReportId = null;
+  currentTeacherReportStatus = null;
+  let payload = null;
+  try {
+    const list = await authFetch(`${API}/report-cards/mine`).then(safeJson);
+    const match = (list || []).find(
+      (r) =>
+        String(r.student_id) === String(studentId) &&
+        String(r.term) === String(term) &&
+        String(r.session) === String(session)
+    );
+    if (match?.id) {
+      const full = await authFetch(`${API}/report-cards/${match.id}`).then(
+        safeJson
+      );
+      currentTeacherReportId = full?.id || match.id;
+      currentTeacherReportStatus = full?.status || match.status;
+      payload = full?.payload || null;
+    }
+  } catch (_e) {
+    // ignore
+  }
+
+  reportPreview.innerHTML = renderTeacherReportTemplate({
+    student,
+    term,
+    session,
+    payload,
+  });
+
+  setReportStatus(currentTeacherReportStatus || "draft");
+
+  const locked =
+    String(currentTeacherReportStatus || "").toLowerCase() === "submitted" ||
+    String(currentTeacherReportStatus || "").toLowerCase() === "approved";
+  reportPreview.querySelectorAll("input, textarea, select").forEach((el) => {
+    if (el.hasAttribute("readonly")) return;
+    el.disabled = locked;
+  });
+
+  if (reportSaveBtn) reportSaveBtn.disabled = locked;
+  if (reportSubmitBtn) reportSubmitBtn.disabled = locked;
+  if (reportPrintBtn)
+    reportPrintBtn.disabled = String(currentTeacherReportStatus) !== "approved";
+}
+
+function initReportCardUI() {
+  if (reportUIInitialized) return;
+  if (role !== "teacher") return;
+  if (!reportForm || !reportGenerateBtn || !reportPrintBtn) return;
+
+  reportUIInitialized = true;
+
+  reportForm.addEventListener("submit", (e) => e.preventDefault());
+
+  reportGenerateBtn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    reportGenerateBtn.disabled = true;
+    try {
+      await buildReportPreview();
+    } finally {
+      reportGenerateBtn.disabled = false;
+    }
+  });
+
+  if (reportSaveBtn) {
+    reportSaveBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const studentId = reportStudentSelect?.value;
+      const term = reportTermInput?.value?.trim();
+      const session = reportSessionInput?.value?.trim();
+      if (!studentId || !term || !session) {
+        notify("Select student, term, and session first.", "warning");
+        return;
+      }
+
+      const payload = collectTeacherReportPayload();
+      if (!payload) {
+        notify("Load the template first.", "warning");
+        return;
+      }
+
+      reportSaveBtn.disabled = true;
+      try {
+        const out = await authFetch(`${API}/report-cards/draft`, {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({
+            student_id: Number(studentId),
+            term,
+            session,
+            payload,
+          }),
+        }).then(safeJson);
+        currentTeacherReportId = out?.id || currentTeacherReportId;
+        setReportStatus(out?.status || "draft");
+        notify("Report card draft saved.", "success");
+      } catch (err) {
+        notify(`Could not save draft: ${err.message}`, "error");
+      } finally {
+        reportSaveBtn.disabled = false;
+      }
+    });
+  }
+
+  if (reportSubmitBtn) {
+    reportSubmitBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      if (!currentTeacherReportId) {
+        notify("Save draft first before sending.", "warning");
+        return;
+      }
+      reportSubmitBtn.disabled = true;
+      try {
+        await authFetch(
+          `${API}/report-cards/${currentTeacherReportId}/submit`,
+          {
+            method: "POST",
+            headers: authHeaders,
+          }
+        ).then(safeJson);
+        setReportStatus("submitted");
+        notify("Sent to owner for review.", "success");
+        await buildReportPreview();
+      } catch (err) {
+        notify(`Could not submit: ${err.message}`, "error");
+      } finally {
+        reportSubmitBtn.disabled = false;
+      }
+    });
+  }
+
+  reportPrintBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    window.print();
+  });
+
+  // Initial state
+  reportPrintBtn.disabled = true;
+  populateReportStudents();
+  buildReportPreview();
+
+  bindReportAutoCalc();
+}
+
+let adminReportUIInitialized = false;
+
+async function loadAdminReportCards() {
+  if (role !== "admin") return;
+  if (!adminReportTableBody) return;
+
+  const status = adminReportStatus?.value;
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  setTableStatus(adminReportTableBody, 8, "Loading report cards...");
+  try {
+    const rows = await authFetch(`${API}/report-cards${qs}`).then(safeJson);
+    const list = rows || [];
+    if (!list.length) {
+      setTableStatus(adminReportTableBody, 8, "No report cards found.");
+      return;
+    }
+
+    adminReportTableBody.innerHTML = list
+      .map((r) => {
+        const classLabel = r.class_name
+          ? `${r.class_name} ${r.class_arm || ""}`
+          : "-";
+        const s = String(r.status || "draft");
+        const statusBadge =
+          s === "approved"
+            ? '<span class="badge badge--active">Approved</span>'
+            : s === "submitted"
+            ? '<span class="badge badge--pending">Submitted</span>'
+            : '<span class="badge badge--disabled">Draft</span>';
+
+        return `
+          <tr data-id="${r.id}">
+            <td>${escapeHtml(r.full_name || "-")}</td>
+            <td>${escapeHtml(classLabel)}</td>
+            <td>${escapeHtml(r.term || "-")}</td>
+            <td>${escapeHtml(r.session || "-")}</td>
+            <td>${escapeHtml(r.teacher_username || "-")}</td>
+            <td>${statusBadge}</td>
+            <td>${escapeHtml(r.updated_at || "-")}</td>
+            <td class="actions">
+              <button class="ghost-btn admin-view-report" data-id="${
+                r.id
+              }">View</button>
+            </td>
+          </tr>
+        `;
+      })
+      .join("");
+    applyMobileTableLabels(adminReportTableBody);
+  } catch (err) {
+    notify(`Failed to load report cards: ${err.message}`, "error");
+    setTableStatus(adminReportTableBody, 8, "Failed to load report cards.");
+  }
+}
+
+async function loadAdminReportPreview(id) {
+  if (!adminReportPreview) return;
+  adminSelectedReportId = id;
+  adminReportPreview.innerHTML =
+    '<div class="report-sheet"><p class="section-note">Loading report preview...</p></div>';
+  if (adminApproveBtn) adminApproveBtn.disabled = true;
+  if (adminPrintBtn) adminPrintBtn.disabled = true;
+
+  try {
+    const report = await authFetch(`${API}/report-cards/${id}`).then(safeJson);
+    adminReportPreview.innerHTML = renderAdminReadonlyTemplate({ report });
+    // disable inputs
+    adminReportPreview
+      .querySelectorAll("input, textarea, select")
+      .forEach((el) => {
+        el.disabled = true;
+      });
+
+    const status = String(report?.status || "draft");
+    if (adminApproveBtn) adminApproveBtn.disabled = status !== "submitted";
+    if (adminPrintBtn) adminPrintBtn.disabled = status !== "approved";
+  } catch (err) {
+    adminReportPreview.innerHTML =
+      '<div class="report-sheet"><p class="section-note">Could not load preview.</p></div>';
+    notify(`Could not load report: ${err.message}`, "error");
+  }
+}
+
+function initAdminReportReviewUI() {
+  if (adminReportUIInitialized) return;
+  if (role !== "admin") return;
+  if (!adminReportTableBody || !adminReportPreview) return;
+  adminReportUIInitialized = true;
+
+  if (adminReportStatus) {
+    adminReportStatus.addEventListener("change", loadAdminReportCards);
+  }
+
+  if (adminReportTableBody) {
+    adminReportTableBody.addEventListener("click", async (e) => {
+      const btn = e.target?.closest?.(".admin-view-report");
+      if (!btn) return;
+      const id = Number(btn.dataset.id);
+      if (!id) return;
+      await loadAdminReportPreview(id);
+    });
+  }
+
+  if (adminApproveBtn) {
+    adminApproveBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      if (!adminSelectedReportId) return;
+      adminApproveBtn.disabled = true;
+      try {
+        await authFetch(
+          `${API}/report-cards/${adminSelectedReportId}/approve`,
+          { method: "POST", headers: authHeaders }
+        ).then(safeJson);
+        notify("Report approved.", "success");
+        await loadAdminReportPreview(adminSelectedReportId);
+        await loadAdminReportCards();
+      } catch (err) {
+        notify(`Approve failed: ${err.message}`, "error");
+      } finally {
+        // loadAdminReportPreview sets correct state
+      }
+    });
+  }
+
+  if (adminPrintBtn) {
+    adminPrintBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      window.print();
+    });
+  }
 }
 
 function populateStudentsForClass(selectEl, classId) {
@@ -264,6 +1112,65 @@ function populateStudentsForClass(selectEl, classId) {
 
   selectEl.innerHTML =
     '<option value="" disabled selected>Select student</option>' + options;
+}
+
+function initialsFromName(name) {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) return "S";
+  const a = parts[0]?.[0] || "";
+  const b = parts.length > 1 ? parts[parts.length - 1]?.[0] || "" : "";
+  return (a + b).toUpperCase() || "S";
+}
+
+function setProfileAvatar(student) {
+  const dataUrl = student?.photo_data_url;
+  if (profileAvatarFallback) {
+    profileAvatarFallback.textContent = initialsFromName(student?.full_name);
+  }
+  if (!profileAvatarImg) return;
+  if (dataUrl) {
+    profileAvatarImg.src = dataUrl;
+    profileAvatarImg.style.display = "block";
+    if (profileAvatarFallback) profileAvatarFallback.style.display = "none";
+  } else {
+    profileAvatarImg.removeAttribute("src");
+    profileAvatarImg.style.display = "none";
+    if (profileAvatarFallback) profileAvatarFallback.style.display = "grid";
+  }
+}
+
+async function imageFileToDataUrl(file) {
+  const maxSide = 280;
+  const quality = 0.82;
+
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const w = Math.max(1, Math.round(bitmap.width * scale));
+  const h = Math.max(1, Math.round(bitmap.height * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(bitmap, 0, 0, w, h);
+
+  // Prefer jpeg for smaller payload
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
+function setProfileQuickActionsEnabled(enabled) {
+  const ok = Boolean(enabled);
+  if (profileQuickPayBtn) profileQuickPayBtn.disabled = !ok;
+  if (profileQuickResultBtn) profileQuickResultBtn.disabled = !ok;
+  if (profilePhotoBtn) {
+    // Allow teachers to upload photos for students in their assigned class
+    const allowPhoto =
+      role === "admin" || role === "account" || role === "teacher";
+    profilePhotoBtn.style.display = allowPhoto ? "inline-flex" : "none";
+  }
 }
 
 async function loadMe() {
@@ -309,6 +1216,12 @@ function authFetch(url, options = {}) {
 
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => {
+    try {
+      sessionStorage.setItem("activeTabId", String(tab.dataset.tab || ""));
+    } catch (_err) {
+      // ignore
+    }
+
     tabs.forEach((t) => t.classList.remove("active"));
     tab.classList.add("active");
 
@@ -317,8 +1230,44 @@ tabs.forEach((tab) => {
   });
 });
 
+function getActiveTabId() {
+  return (
+    document.querySelector(".tab-btn.active")?.dataset?.tab ||
+    document.querySelector(".tab-content.active")?.id ||
+    null
+  );
+}
+
+function restoreActiveTab(tabId) {
+  if (!tabId) return;
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
+  if (!btn) return;
+  // Don't switch to tabs hidden by role UI
+  if (btn.offsetParent === null) return;
+  try {
+    sessionStorage.setItem("activeTabId", String(tabId));
+  } catch (_err) {
+    // ignore
+  }
+  btn.click();
+}
+
 if (tabs.length) {
-  tabs[0].click();
+  let desired = null;
+  try {
+    desired = sessionStorage.getItem("activeTabId");
+  } catch (_err) {
+    desired = null;
+  }
+
+  const desiredBtn = desired
+    ? document.querySelector(`.tab-btn[data-tab="${desired}"]`)
+    : null;
+  if (desiredBtn && desiredBtn.offsetParent !== null) {
+    desiredBtn.click();
+  } else {
+    tabs[0].click();
+  }
 }
 
 function exportTableToCSV(tableId, filename = "export.csv") {
@@ -379,7 +1328,7 @@ paymentTypeInputs.forEach((input) =>
 syncHalfFields();
 
 async function loadClasses() {
-  setTableStatus(classesTableBody, 2, "Loading classes...");
+  setTableStatus(classesTableBody, 3, "Loading classes...");
   setSelectPlaceholder(classSelect, "Loading classes...");
   setSelectPlaceholder(resultClassSelect, "Loading classes...");
   setSelectPlaceholder(profileClassSelect, "Loading classes...");
@@ -388,23 +1337,19 @@ async function loadClasses() {
   const res = await authFetch(`${API}/classes`);
   const classes = await safeJson(res).catch((err) => {
     notify(`Failed to load classes: ${err.message}`, "error");
-    setTableStatus(classesTableBody, 2, "Failed to load classes.");
+    setTableStatus(classesTableBody, 3, "Failed to load classes.");
     return [];
   });
   if (!classes.length) {
     setTableStatus(
       classesTableBody,
-      2,
+      3,
       "No classes yet. Add a class or use Seed."
     );
     setSelectPlaceholder(classSelect, "No classes yet");
     setSelectPlaceholder(resultClassSelect, "No classes yet");
     setSelectPlaceholder(profileClassSelect, "No classes yet");
     setSelectPlaceholder(paymentClassSelect, "No classes yet");
-    return [];
-  }
-  if (classes.length < 12 && seedClassesBtn) {
-    await seedDefaults();
     return [];
   }
   classesCache = classes;
@@ -423,11 +1368,50 @@ async function loadClasses() {
     <tr>
       <td>${c.name}</td>
       <td>${c.arm || "-"}</td>
+      <td class="actions">
+        ${
+          role === "admin"
+            ? `<button type="button" class="ghost-btn class-remove" data-id="${c.id}">Remove</button>`
+            : "-"
+        }
+      </td>
     </tr>`
     )
     .join("");
   applyMobileTableLabels(classesTableBody);
   return classes;
+}
+
+if (classesTableBody) {
+  classesTableBody.addEventListener("click", async (e) => {
+    const btn = e.target.closest?.(".class-remove");
+    if (!btn) return;
+    e.preventDefault();
+    if (role !== "admin") {
+      notify("Only admin can remove classes.", "warning");
+      return;
+    }
+
+    const id = btn.dataset.id;
+    if (!id) return;
+    if (!confirm("Remove this class?")) return;
+
+    await runWithButtonBusy(btn, "Removing...", async () => {
+      try {
+        await authFetch(`${API}/classes/${id}`, {
+          method: "DELETE",
+          headers: authHeaders,
+        }).then(safeJson);
+        notify("Class removed", "success");
+        const activeTab = getActiveTabId();
+        await loadClasses();
+        await loadUsers();
+        restoreActiveTab(activeTab);
+      } catch (err) {
+        notify(`Remove failed: ${err.message}`, "error");
+      }
+    });
+  });
 }
 
 async function loadClassResults() {
@@ -627,17 +1611,30 @@ async function loadStudents() {
   });
   if (!students) return [];
 
-  if (!students.length) {
+  const assignedCid = Number(assignedClassId || 0);
+  const visibleStudents =
+    role === "teacher" && assignedCid
+      ? (students || []).filter((s) => Number(s.class_id) === assignedCid)
+      : students;
+
+  if (!visibleStudents.length) {
     setTableStatus(
       studentsTableBody,
       4,
-      "No students yet. Use the 'Add student' form to create one."
+      role === "teacher"
+        ? "No students found in your assigned class."
+        : "No students yet. Use the 'Add student' form to create one."
     );
   }
 
-  studentsCache = students;
+  studentsCache = visibleStudents;
 
-  studentsTableBody.innerHTML = students
+  // Teacher Report Card uses the same student cache
+  if (role === "teacher") {
+    populateReportStudents();
+  }
+
+  studentsTableBody.innerHTML = visibleStudents
     .map(
       (s) => `
     <tr data-id="${s.id}">
@@ -867,8 +1864,17 @@ async function loadStudentProfile(studentId) {
   const student = studentsCache.find((s) => String(s.id) === String(studentId));
   if (!student) {
     if (profileDetailsBody) profileDetailsBody.innerHTML = "";
+    currentProfileStudentId = null;
+    currentProfileClassId = null;
+    setProfileQuickActionsEnabled(false);
+    setProfileAvatar(null);
     return;
   }
+
+  currentProfileStudentId = Number(student.id);
+  currentProfileClassId = Number(student.class_id || 0);
+  setProfileAvatar(student);
+  setProfileQuickActionsEnabled(true);
 
   if (profileDetailsBody) {
     profileDetailsBody.innerHTML = `
@@ -953,6 +1959,91 @@ async function loadStudentProfile(studentId) {
   }
 }
 
+if (profileQuickPayBtn) {
+  profileQuickPayBtn.addEventListener("click", () => {
+    if (!currentProfileStudentId || !currentProfileClassId) {
+      notify("Load a student profile first.", "warning");
+      return;
+    }
+    const tabBtn = document.querySelector('[data-tab="paymentsTab"]');
+    if (!tabBtn || tabBtn.offsetParent === null) {
+      notify("Payments is not available for your role.", "warning");
+      return;
+    }
+    tabBtn.click();
+    if (paymentClassSelect) {
+      paymentClassSelect.value = String(currentProfileClassId);
+      paymentClassSelect.dispatchEvent(new Event("change"));
+    }
+    if (studentSelect) studentSelect.value = String(currentProfileStudentId);
+    amountPaidInput?.focus?.();
+  });
+}
+
+if (profileQuickResultBtn) {
+  profileQuickResultBtn.addEventListener("click", () => {
+    if (!currentProfileStudentId || !currentProfileClassId) {
+      notify("Load a student profile first.", "warning");
+      return;
+    }
+    const tabBtn = document.querySelector('[data-tab="resultsTab"]');
+    if (!tabBtn || tabBtn.offsetParent === null) {
+      notify("Results is not available for your role.", "warning");
+      return;
+    }
+    tabBtn.click();
+
+    if (resultClassSelect) {
+      resultClassSelect.value = String(currentProfileClassId);
+      // populate student list for this class and trigger table refresh
+      populateStudentsForClass(resultStudentSelect, currentProfileClassId);
+      resultClassSelect.dispatchEvent(new Event("change"));
+    }
+    if (resultStudentSelect)
+      resultStudentSelect.value = String(currentProfileStudentId);
+    resultTermInput?.focus?.();
+  });
+}
+
+if (profilePhotoInput) {
+  profilePhotoInput.addEventListener("change", async () => {
+    const file = profilePhotoInput.files?.[0];
+    if (!file) return;
+    if (!currentProfileStudentId) {
+      notify("Load a student profile first.", "warning");
+      profilePhotoInput.value = "";
+      return;
+    }
+
+    try {
+      const dataUrl = await imageFileToDataUrl(file);
+      if (String(dataUrl).length > 350000) {
+        notify("Image is too large. Use a smaller photo.", "warning");
+        profilePhotoInput.value = "";
+        return;
+      }
+
+      await authFetch(`${API}/students/${currentProfileStudentId}`, {
+        method: "PATCH",
+        headers: authHeaders,
+        body: JSON.stringify({ photo_data_url: dataUrl }),
+      }).then(safeJson);
+
+      // Update cache and UI
+      const idx = (studentsCache || []).findIndex(
+        (s) => String(s.id) === String(currentProfileStudentId)
+      );
+      if (idx >= 0) studentsCache[idx].photo_data_url = dataUrl;
+      setProfileAvatar({ ...studentsCache[idx] });
+      notify("Photo updated", "success");
+    } catch (err) {
+      notify(`Photo update failed: ${err.message}`, "error");
+    } finally {
+      profilePhotoInput.value = "";
+    }
+  });
+}
+
 async function loadPayments() {
   setTableStatus(paymentTableBody, 5, "Loading payment summary...");
   const res = await authFetch(`${API}/payments/summary`);
@@ -1000,52 +2091,56 @@ async function loadPayments() {
   applyMobileTableLabels(paymentTableBody);
 }
 
-studentForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const formData = Object.fromEntries(new FormData(studentForm).entries());
+if (studentForm) {
+  studentForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const formData = Object.fromEntries(new FormData(studentForm).entries());
 
-  await runWithFormBusy(studentForm, "Saving...", async () => {
-    try {
-      await authFetch(`${API}/students`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify(formData),
-      }).then(safeJson);
-    } catch (err) {
-      notify(`Could not add student: ${err.message}`, "error");
-      return;
-    }
-    studentForm.reset();
-    notify("Student added", "success");
-    await loadAllData();
+    await runWithFormBusy(studentForm, "Saving...", async () => {
+      try {
+        await authFetch(`${API}/students`, {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify(formData),
+        }).then(safeJson);
+      } catch (err) {
+        notify(`Could not add student: ${err.message}`, "error");
+        return;
+      }
+      studentForm.reset();
+      notify("Student added", "success");
+      await loadAllData();
+    });
   });
-});
+}
 
-paymentForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const data = Object.fromEntries(new FormData(paymentForm).entries());
-  if (data.payment_type !== "half") {
-    data.payment_type = "full";
-    data.amount_remaining = 0;
-  }
-
-  await runWithFormBusy(paymentForm, "Saving...", async () => {
-    try {
-      await authFetch(`${API}/payments`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify(data),
-      }).then(safeJson);
-    } catch (err) {
-      notify(`Could not save payment: ${err.message}`, "error");
-      return;
+if (paymentForm) {
+  paymentForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(paymentForm).entries());
+    if (data.payment_type !== "half") {
+      data.payment_type = "full";
+      data.amount_remaining = 0;
     }
-    paymentForm.reset();
-    syncHalfFields();
-    notify("Payment saved", "success");
-    await loadPayments();
+
+    await runWithFormBusy(paymentForm, "Saving...", async () => {
+      try {
+        await authFetch(`${API}/payments`, {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify(data),
+        }).then(safeJson);
+      } catch (err) {
+        notify(`Could not save payment: ${err.message}`, "error");
+        return;
+      }
+      paymentForm.reset();
+      syncHalfFields();
+      notify("Payment saved", "success");
+      await loadPayments();
+    });
   });
-});
+}
 
 if (resultForm) {
   resultForm.addEventListener("submit", async (e) => {
@@ -1094,44 +2189,53 @@ if (resultForm) {
   });
 }
 
-classForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const data = Object.fromEntries(new FormData(classForm).entries());
+if (classForm) {
+  classForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(classForm).entries());
 
-  await runWithFormBusy(classForm, "Saving...", async () => {
-    try {
-      await authFetch(`${API}/classes`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify(data),
-      }).then(safeJson);
-    } catch (err) {
-      notify(`Could not add class: ${err.message}`, "error");
-      return;
-    }
-    classForm.reset();
-    notify("Class added", "success");
-    await loadAllData();
+    await runWithFormBusy(classForm, "Saving...", async () => {
+      try {
+        await authFetch(`${API}/classes`, {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify(data),
+        }).then(safeJson);
+      } catch (err) {
+        notify(`Could not add class: ${err.message}`, "error");
+        return;
+      }
+      classForm.reset();
+      notify("Class added", "success");
+      const activeTab = getActiveTabId();
+      await loadClasses();
+      await loadUsers();
+      restoreActiveTab(activeTab);
+    });
   });
-});
+}
 
-studentSearch.addEventListener("input", (e) => {
-  const filter = e.target.value.toLowerCase();
-  document.querySelectorAll("#studentsTable tbody tr").forEach((row) => {
-    row.style.display = row.innerText.toLowerCase().includes(filter)
-      ? ""
-      : "none";
+if (studentSearch) {
+  studentSearch.addEventListener("input", (e) => {
+    const filter = e.target.value.toLowerCase();
+    document.querySelectorAll("#studentsTable tbody tr").forEach((row) => {
+      row.style.display = row.innerText.toLowerCase().includes(filter)
+        ? ""
+        : "none";
+    });
   });
-});
+}
 
-paymentSearch.addEventListener("input", (e) => {
-  const filter = e.target.value.toLowerCase();
-  document.querySelectorAll("#paymentTable tbody tr").forEach((row) => {
-    row.style.display = row.innerText.toLowerCase().includes(filter)
-      ? ""
-      : "none";
+if (paymentSearch) {
+  paymentSearch.addEventListener("input", (e) => {
+    const filter = e.target.value.toLowerCase();
+    document.querySelectorAll("#paymentTable tbody tr").forEach((row) => {
+      row.style.display = row.innerText.toLowerCase().includes(filter)
+        ? ""
+        : "none";
+    });
   });
-});
+}
 
 studentsTableBody.addEventListener("click", async (e) => {
   const id = e.target.dataset.id;
@@ -1241,7 +2345,10 @@ async function seedDefaults() {
     await authFetch(`${API}/classes/seed-default`, { method: "POST" }).then(
       safeJson
     );
-    await loadAllData();
+    const activeTab = getActiveTabId();
+    await loadClasses();
+    await loadUsers();
+    restoreActiveTab(activeTab);
     notify("Default classes ensured (JSS1-SS3 A/B)", "success");
   } catch (err) {
     notify(`Seeding failed: ${err.message}`, "error");
@@ -1265,6 +2372,7 @@ if (resultSessionInput) {
 }
 
 async function loadAllData() {
+  const activeTab = getActiveTabId();
   await loadMe();
   await loadClasses();
   enforceTeacherClassLock();
@@ -1273,6 +2381,12 @@ async function loadAllData() {
   await loadClassResults();
   await loadUsers();
   applyRoleUI();
+  initReportCardUI();
+  initAdminReportReviewUI();
+  if (role === "admin") {
+    await loadAdminReportCards();
+  }
+  restoreActiveTab(activeTab);
 }
 
 loadAllData();

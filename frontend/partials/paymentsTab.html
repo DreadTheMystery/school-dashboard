@@ -1,0 +1,60 @@
+<div class="section-header">
+    <div>
+        <p class="eyebrow">Finance</p>
+        <h2>Payments</h2>
+        <p class="section-note">Track full and half payments with remaining balances at a glance.</p>
+    </div>
+    <input type="text" id="paymentSearch" class="input search" placeholder="Search payments">
+</div>
+
+<div class="grid">
+    <div class="card">
+        <div class="card__head">
+            <h3>Record payment</h3>
+        </div>
+        <form id="paymentForm" class="form-grid">
+            <label>Class <select id="paymentClassSelect" required></select></label>
+            <label>Student <select name="student_id" id="studentSelect" required></select></label>
+
+            <div class="chip-group" id="paymentTypeGroup">
+                <span class="chip-label">Payment type</span>
+                <label class="chip">
+                    <input type="radio" name="payment_type" value="full" checked>
+                    <span>Full payment</span>
+                </label>
+                <label class="chip">
+                    <input type="radio" name="payment_type" value="half">
+                    <span>Half payment</span>
+                </label>
+            </div>
+
+            <label>Amount paid <input type="number" name="amount_paid" id="amountPaid" placeholder="0" required></label>
+            <label class="half-only">Amount remaining <input type="number" name="amount_remaining" id="amountRemaining"
+                    placeholder="0"></label>
+            <label>Term <input type="text" name="term" placeholder="e.g. 1st Term" required></label>
+            <label>Session <input type="text" name="session" placeholder="e.g. 2025/2026" required></label>
+            <button type="submit" class="primary-btn">Save payment</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <div class="card__head">
+            <h3>Payment summary</h3>
+            <button class="ghost-btn" id="exportPaymentsAnchor">Export CSV</button>
+        </div>
+        <div class="table-wrap">
+            <table id="paymentTable">
+                <thead>
+                    <tr>
+                        <th>Admission No</th>
+                        <th>Student Name</th>
+                        <th>Total Paid</th>
+                        <th>Remaining</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>

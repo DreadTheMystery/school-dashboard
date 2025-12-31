@@ -32,6 +32,22 @@ const Class = {
     `;
     db.all(sql, [], callback);
   },
+
+  countStudents: (classId, callback) => {
+    const sql = "SELECT COUNT(1) AS cnt FROM students WHERE class_id = ?";
+    db.get(sql, [classId], (err, row) => {
+      if (err) return callback(err);
+      callback(null, Number(row?.cnt || 0));
+    });
+  },
+
+  deleteById: (classId, callback) => {
+    const sql = "DELETE FROM classes WHERE id = ?";
+    db.run(sql, [classId], function (err) {
+      if (err) return callback(err);
+      callback(null, Number(this.changes || 0));
+    });
+  },
 };
 
 module.exports = Class;

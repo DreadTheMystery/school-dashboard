@@ -11,8 +11,9 @@ const Student = {
         religion,
         class_id,
         guardian_name,
-        guardian_phone
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        guardian_phone,
+        photo_data_url
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const values = [
@@ -24,6 +25,7 @@ const Student = {
       student.class_id,
       student.guardian_name,
       student.guardian_phone,
+      student.photo_data_url,
     ];
 
     db.run(sql, values, function (err) {
@@ -39,6 +41,21 @@ const Student = {
     `;
 
     db.all(sql, [], callback);
+  },
+
+  getAllByClass: (class_id, callback) => {
+    const sql = `
+      SELECT students.*, classes.name AS class_name, classes.arm
+      FROM students
+      LEFT JOIN classes ON students.class_id = classes.id
+      WHERE students.class_id = ?
+    `;
+    db.all(sql, [class_id], callback);
+  },
+
+  getById: (id, callback) => {
+    const sql = `SELECT * FROM students WHERE id = ?`;
+    db.get(sql, [id], callback);
   },
 };
 

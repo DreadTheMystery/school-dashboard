@@ -20,4 +20,6 @@ router.get(
   classController.getClassesWithStudents
 );
 
+router.delete("/classes/:id", auth(["admin"]), classController.deleteClass);
+
 module.exports = router;

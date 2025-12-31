@@ -7,6 +7,7 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const authRoutes = require("./routes/authRoutes");
 const resultRoutes = require("./routes/resultRoutes");
 const userRoutes = require("./routes/userRoutes");
+const reportCardRoutes = require("./routes/reportCardRoutes");
 const classController = require("./controllers/classController");
 const auth = require("./middlewares/authMiddleware");
 
@@ -21,6 +22,7 @@ app.use("/api", classRoutes);
 app.use("/api", paymentRoutes);
 app.use("/api", resultRoutes);
 app.use("/api", userRoutes);
+app.use("/api", reportCardRoutes);
 
 // Fallback registration to ensure seed route is always reachable
 app.post(

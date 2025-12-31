@@ -1,0 +1,48 @@
+<div class="section-header">
+    <div>
+        <p class="eyebrow">Academics</p>
+        <h2>Results</h2>
+        <p class="section-note">Enter one total per student, per term (test + exam).</p>
+    </div>
+</div>
+
+<div class="grid">
+    <div class="card">
+        <div class="card__head">
+            <h3>Save result</h3>
+            <small>Select class, term, and session first.</small>
+        </div>
+        <form id="resultForm" class="form-grid">
+            <label>Class <select id="resultClassSelect" required></select></label>
+            <label>Student <select id="resultStudentSelect" required></select></label>
+            <label>Term <input type="text" id="resultTerm" placeholder="e.g. 1st Term" required></label>
+            <label>Session <input type="text" id="resultSession" placeholder="e.g. 2025/2026" required></label>
+            <label>Test score <input type="number" id="resultTest" placeholder="0" min="0" required></label>
+            <label>Exam score <input type="number" id="resultExam" placeholder="0" min="0" required></label>
+            <button type="submit" class="primary-btn">Save result</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <div class="card__head">
+            <h3>Class results</h3>
+            <small>Loads the selected class for the chosen term/session.</small>
+        </div>
+        <div class="table-wrap">
+            <table id="resultsTable">
+                <thead>
+                    <tr>
+                        <th>Admission No</th>
+                        <th>Student Name</th>
+                        <th>Test</th>
+                        <th>Exam</th>
+                        <th>Total</th>
+                        <th>Updated</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,120 @@
+<div class="section-header">
+    <div>
+        <p class="eyebrow">Structure</p>
+        <h2>Classes</h2>
+        <p class="section-note">Create classes and arms to keep students organized.</p>
+    </div>
+</div>
+
+<div class="grid" id="classesAdminGrid">
+    <div class="card">
+        <div class="card__head">
+            <h3>Add class</h3>
+            <button type="button" class="ghost-btn" id="seedClassesBtn">Seed JSS1-SS3 A/B</button>
+        </div>
+        <form id="classForm" class="form-grid">
+            <label>Class name <input type="text" name="name" placeholder="e.g. Grade 10" required></label>
+            <label>Arm <input type="text" name="arm" placeholder="e.g. A (optional)"></label>
+            <button type="submit" class="primary-btn">Add class</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <div class="card__head">
+            <h3>Classes list</h3>
+        </div>
+        <div class="table-wrap">
+            <table id="classesTable">
+                <thead>
+                    <tr>
+                        <th>Class Name</th>
+                        <th>Arm</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="grid" id="reportCardGrid" style="display:none">
+    <div class="card">
+        <div class="card__head">
+            <div>
+                <h3>Report card</h3>
+                <small>Create and print a term report before holiday.</small>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <span class="pill" id="reportStatusPill" style="display:none"></span>
+                <button type="button" class="ghost-btn" id="reportPrintBtn" disabled>Print</button>
+            </div>
+        </div>
+        <form id="reportForm" class="form-grid">
+            <label>Student <select id="reportStudentSelect" required></select></label>
+            <label>Term <input type="text" id="reportTerm" placeholder="e.g. 1st Term" required></label>
+            <label>Session <input type="text" id="reportSession" placeholder="e.g. 2025/2026" required></label>
+            <button type="button" class="primary-btn" id="reportGenerateBtn">Load template</button>
+            <button type="button" class="ghost-btn" id="reportSaveBtn">Save draft</button>
+            <button type="button" class="ghost-btn" id="reportSubmitBtn">Send to owner</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <div class="card__head">
+            <div>
+                <h3>Preview</h3>
+                <small>Fill scores, save draft, then send to owner.</small>
+            </div>
+        </div>
+        <div id="reportPreview" class="report-card" aria-live="polite"></div>
+    </div>
+</div>
+
+<div class="grid" id="reportReviewGrid" style="display:none">
+    <div class="card">
+        <div class="card__head">
+            <div>
+                <h3>Report cards (owner review)</h3>
+                <small>Teachers submit here. Approve before printing.</small>
+            </div>
+            <select id="adminReportStatus" class="input" style="max-width: 220px;">
+                <option value="submitted" selected>Submitted</option>
+                <option value="approved">Approved</option>
+                <option value="draft">Draft</option>
+                <option value="">All</option>
+            </select>
+        </div>
+        <div class="table-wrap">
+            <table id="adminReportTable">
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Class</th>
+                        <th>Term</th>
+                        <th>Session</th>
+                        <th>Teacher</th>
+                        <th>Status</th>
+                        <th>Updated</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card__head">
+            <div>
+                <h3>Review preview</h3>
+                <small>Select a report card to review/print.</small>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button type="button" class="ghost-btn" id="adminApproveBtn" disabled>Approve</button>
+                <button type="button" class="ghost-btn" id="adminPrintBtn" disabled>Print</button>
+            </div>
+        </div>
+        <div id="adminReportPreview" class="report-card" aria-live="polite"></div>
+    </div>
+</div>

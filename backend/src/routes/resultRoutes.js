@@ -19,4 +19,16 @@ router.get(
   resultController.getClassResults
 );
 
+router.post(
+  "/results/class/:class_id/submit",
+  auth(["teacher"]),
+  resultController.submitClassResults
+);
+
+router.post(
+  "/results/class/:class_id/approve",
+  auth(["admin"]),
+  resultController.approveClassResults
+);
+
 module.exports = router;

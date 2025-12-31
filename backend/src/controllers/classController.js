@@ -76,3 +76,24 @@ exports.getClassesWithStudents = (req, res) => {
     res.json(grouped);
   });
 };
+
+exports.deleteClass = (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ message: "Invalid class id" });
+
+  Class.countStudents(id, (countErr, count) => {
+    if (countErr) return res.status(500).json({ error: countErr.message });
+    if (Number(count) > 0) {
+      return res.status(400).json({
+        message:
+          "Cannot delete this class because students are assigned to it. Move/delete students first.",
+      });
+    }
+
+    Class.deleteById(id, (delErr, changes) => {
+      if (delErr) return res.status(500).json({ error: delErr.message });
+      if (!changes) return res.status(404).json({ message: "Class not found" });
+      res.json({ message: "Class deleted" });
+    });
+  });
+};

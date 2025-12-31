@@ -175,6 +175,19 @@ const Payment = {
     `;
     db.all(sql, [], callback);
   },
+
+  getSummaryForClass: (class_id, callback) => {
+    const sql = `
+      SELECT students.id AS student_id, students.full_name, students.admission_no,
+             IFNULL(SUM(payments.amount_paid), 0) AS total_paid,
+             IFNULL(SUM(payments.amount_remaining), 0) AS total_remaining
+      FROM students
+      LEFT JOIN payments ON payments.student_id = students.id
+      WHERE students.class_id = ?
+      GROUP BY students.id
+    `;
+    db.all(sql, [class_id], callback);
+  },
 };
 
 module.exports = Payment;
